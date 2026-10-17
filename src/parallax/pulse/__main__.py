@@ -66,6 +66,12 @@ def _run_demo(args: argparse.Namespace) -> int:
     return run_demo_suite(host=args.host, port=args.port, mode=args.mode)
 
 
+def _run_verify(args: argparse.Namespace) -> int:
+    from parallax.verify import run_verification
+
+    return run_verification(host=args.host, verbose=args.verbose)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="PULSE/1 protocol CLI suite.")
     subparsers = parser.add_subparsers(dest="subcommand", help="Subcommand to execute")
@@ -97,6 +103,11 @@ def main() -> int:
     demo_parser.add_argument("--port", type=int, default=None, help="Port of running service (default: spawns local)")
     demo_parser.add_argument("--mode", choices=["both", "vulnerable", "corrected"], default="both", help="Demo mode")
 
+    # verify subcommand
+    verify_parser = subparsers.add_parser("verify", help="Run lab environment and protocol verification")
+    verify_parser.add_argument("--host", default="127.0.0.1", help="Target host (default: 127.0.0.1)")
+    verify_parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
+
     # Fallback compatibility flags if invoked directly without subcommand:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
@@ -111,6 +122,8 @@ def main() -> int:
         return _run_client(args)
     elif args.subcommand == "demo":
         return _run_demo(args)
+    elif args.subcommand == "verify":
+        return _run_verify(args)
     else:
         # Default behavior: run server
         return _run_server(args)
