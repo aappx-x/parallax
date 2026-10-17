@@ -1,0 +1,48 @@
+{
+  "manifest_version": "1.0.0",
+  "scenario": "Meridian Research Incident",
+  "generated_utc": "2026-10-17T11:19:57.681857+00:00",
+  "total_files": 4,
+  "artifacts": [
+    {
+      "path": "raw/network/capture.meta",
+      "sha256": "4a837b383dcc89b3d2bbcd1b18eb6760ea7652aa25f4337d93394252d0620684",
+      "size_bytes": 1068,
+      "modified_utc": "2026-10-17T11:19:57.681113+00:00",
+      "evidence_id": "EV-NET-002",
+      "source_system": "TAP-MERIDIAN-01",
+      "format": "application/json",
+      "description": "Synthetic network tap capture metadata documenting hardware clock offset (-420s)"
+    },
+    {
+      "path": "raw/network/pulse_session.transcript",
+      "sha256": "e0bcc39236827c83532c89f69452979ab91d2bf9959a2babb686ddb80c2db7ff",
+      "size_bytes": 2325,
+      "modified_utc": "2026-10-17T11:19:57.681035+00:00",
+      "evidence_id": "EV-NET-001",
+      "source_system": "TAP-MERIDIAN-01",
+      "format": "text/transcript",
+      "description": "Synthetic wire communication transcript of PULSE/1 session on port 7741"
+    },
+    {
+      "path": "raw/system/pulse.conf",
+      "sha256": "b829ff66c1a7afc9c2a32821e48800c445d50c52a6bb66ea2da150fdf00e58f9",
+      "size_bytes": 640,
+      "modified_utc": "2026-10-17T11:19:57.681178+00:00",
+      "evidence_id": "EV-CFG-001",
+      "source_system": "meridian-lab",
+      "format": "text/ini",
+      "description": "Synthetic PULSE/1 daemon configuration file snapshot (/etc/pulse/pulse.conf)"
+    },
+    {
+      "path": "raw/system/service_inventory.json",
+      "sha256": "07c6d7ceb6b0d6ddd8b1161663e26172906a2efe29ed1211a5fb91231933b76c",
+      "size_bytes": 736,
+      "modified_utc": "2026-10-17T11:19:57.681235+00:00",
+      "evidence_id": "EV-SRV-001",
+      "source_system": "meridian-lab",
+      "format": "application/json",
+      "description": "Synthetic host service footprint inventory snapshot"
+    }
+  ]
+}

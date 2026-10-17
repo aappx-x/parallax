@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import json
 import platform
 import socket
 import sys
@@ -210,6 +211,35 @@ class LabVerifier:
             "SHA-256 calculation, manifest generation, and tamper detection passed",
         )
 
+    def verify_workspace_evidence(self) -> CheckResult:
+        """Verify the integrity of existing raw forensic evidence artifacts."""
+        ev_dir = Path("evidence").resolve()
+        manifest_file = ev_dir / "manifests" / "manifest.json"
+        if not manifest_file.is_file():
+            return CheckResult(
+                "Workspace Evidence Integrity",
+                False,
+                "Missing evidence/manifests/manifest.json",
+            )
+
+        with manifest_file.open("r", encoding="utf-8") as f:
+            manifest_data = json.load(f)
+
+        is_valid, errors = verify_manifest(manifest_data, base_dir=ev_dir)
+        if not is_valid:
+            return CheckResult(
+                "Workspace Evidence Integrity",
+                False,
+                f"Manifest verification failed: {errors}",
+            )
+
+        count = len(manifest_data.get("artifacts", []))
+        return CheckResult(
+            "Workspace Evidence Integrity",
+            True,
+            f"All {count} raw evidence artifacts verified against SHA-256 manifest",
+        )
+
     def run_all(self) -> list[CheckResult]:
         """Run all verification checks in deterministic order."""
         checks = [
@@ -219,6 +249,7 @@ class LabVerifier:
             self.verify_corrected_defense,
             self.verify_demo_suite,
             self.verify_manifest_subsystem,
+            self.verify_workspace_evidence,
         ]
 
         self.results = []

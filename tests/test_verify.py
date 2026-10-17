@@ -44,6 +44,13 @@ def test_verify_manifest_subsystem():
     assert res.passed is True
 
 
+def test_verify_workspace_evidence():
+    verifier = LabVerifier()
+    res = verifier.verify_workspace_evidence()
+    assert res.passed is True
+    assert "verified against SHA-256 manifest" in res.details
+
+
 def test_run_verification_runner():
     exit_code = run_verification(host="127.0.0.1", verbose=False)
     assert exit_code == 0
