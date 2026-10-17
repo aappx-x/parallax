@@ -1,0 +1,47 @@
+# ============================================================================
+# PARALLAX FORENSIC EVIDENCE — PULSE/1 WIRE TRANSCRIPT
+# Evidence ID: EV-NET-001
+# Tap Source:  TAP-MERIDIAN-01 (eth0-span)
+# Capture Window (Tap RTC Time): 2026-09-14T03:14:02Z to 2026-09-14T03:15:06Z
+# Note: Hardware tap clock reflects recorded offset: -420 seconds.
+# Client: 198.51.100.24:49822 <---> Server: 10.0.4.15:7741
+# Protocol: PULSE/1 (Magic: 0x50554c53, Version: 1)
+# ============================================================================
+
+[2026-09-14T03:14:02.108422Z] TCP 3-WAY HANDSHAKE ESTABLISHED
+  SRC: 198.51.100.24:49822 -> DST: 10.0.4.15:7741 [SYN, ACK]
+
+[2026-09-14T03:14:02.115201Z] FRAME 1: CLIENT -> SERVER [HELLO / 0x01]
+  Length: 64 bytes
+  Payload: {"client": "pulse-cli/0.1.0", "protocol_version": 1, "session_mode": "interactive"}
+
+[2026-09-14T03:14:02.118940Z] FRAME 2: SERVER -> CLIENT [STATUS / 0x03]
+  Length: 88 bytes
+  Payload: {"status": "ready", "service": "PULSE/1", "version": "0.1.0", "vulnerable_mode": true}
+
+[2026-09-14T03:14:15.221045Z] FRAME 3: CLIENT -> SERVER [AUTH / 0x02]
+  Length: 63 bytes
+  Payload: {"username": "svc-pulse", "password": "WrongPasswordAttempt#99"}
+
+[2026-09-14T03:14:15.224810Z] FRAME 4: SERVER -> CLIENT [ERROR / 0x06]
+  Length: 46 bytes
+  Payload: {"error": "Authentication Failed", "code": 401}
+
+[2026-09-14T03:14:28.401890Z] FRAME 5: CLIENT -> SERVER [READ_DIAG / 0x04]
+  Length: 27 bytes
+  Payload: {"section": "system_config"}
+
+[2026-09-14T03:14:28.406120Z] FRAME 6: SERVER -> CLIENT [READ_DIAG / 0x04]
+  Length: 312 bytes
+  Payload: {"section": "system_config", "service": "PULSE/1", "version": "0.1.0", "daemon_user": "svc-pulse", "helper_path": "/usr/local/bin/pulse-helper", "config_path": "/etc/pulse/pulse.conf", "archive_directory": "/var/archive/meridian", "diagnostic_ticket": "DIAG-TKT-7741-ALPHA", "encryption_passphrase_fragment": "meridian-vault-2024-fragA"}
+
+[2026-09-14T03:15:05.894102Z] FRAME 7: CLIENT -> SERVER [CLOSE / 0x05]
+  Length: 28 bytes
+  Payload: {"reason": "client_finished"}
+
+[2026-09-14T03:15:05.897300Z] FRAME 8: SERVER -> CLIENT [CLOSE / 0x05]
+  Length: 47 bytes
+  Payload: {"status": "closed", "message": "Session terminated"}
+
+[2026-09-14T03:15:05.901240Z] TCP CONNECTION TERMINATED [FIN, ACK]
+# End of transcript (EV-NET-001)

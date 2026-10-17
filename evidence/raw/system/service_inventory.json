@@ -1,0 +1,25 @@
+{
+  "evidence_id": "EV-SRV-001",
+  "scenario": "Meridian Research Incident",
+  "hostname": "meridian-lab",
+  "system_ip": "10.0.4.15",
+  "collected_utc": "2026-09-14T06:00:00Z",
+  "collector": "triage-collector-v1.4",
+  "description": "System service inventory captured during initial host forensic triage",
+  "services": [
+    {
+      "name": "pulse.service",
+      "description": "PULSE/1 Telemetry and Diagnostics Daemon",
+      "state": "active",
+      "main_pid": 1412,
+      "user": "svc-pulse",
+      "listen_ports": [
+        7741
+      ],
+      "bind_address": "0.0.0.0",
+      "binary_path": "/usr/local/bin/pulse-daemon",
+      "config_file": "/etc/pulse/pulse.conf",
+      "cgroup": "system.slice/pulse.service"
+    }
+  ]
+}

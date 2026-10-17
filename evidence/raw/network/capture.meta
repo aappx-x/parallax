@@ -1,0 +1,22 @@
+{
+  "evidence_id": "EV-NET-002",
+  "scenario": "Meridian Research Incident",
+  "artifact_format": "JSON",
+  "source_system": "TAP-MERIDIAN-01",
+  "tap_device_id": "TAP-MERIDIAN-01",
+  "interface": "eth0-span",
+  "location": "Rack 4, Switch DC2-SW01 (Upstream Optical Tap)",
+  "capture_target": "10.0.4.15:7741",
+  "capture_start_utc": "2026-09-14T03:14:00Z",
+  "capture_end_utc": "2026-09-14T03:16:00Z",
+  "clock_sync_status": "DEGRADED",
+  "clock_offset_seconds": -420,
+  "reference_sync": {
+    "recorded_timestamp": "2026-09-14T03:14:02.108422Z",
+    "clock_offset_seconds": -420,
+    "calibrated_utc_timestamp": "2026-09-14T03:21:02.108422Z"
+  },
+  "source_classification": "SYNTHETIC_METADATA",
+  "calibration_note": "Hardware tap RTC drifted -420s relative to workstation host NTP clock.",
+  "investigator_warning": "Synthetic source metadata. A uniform timestamp difference alone must not be represented as definitive proof of its cause. Empirical corroboration against independent host event logs is required to substantiate time synchronization anomalies."
+}

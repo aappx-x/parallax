@@ -23,6 +23,7 @@ def generate_manifest(
     directory: str | Path,
     base_dir: str | Path | None = None,
     scenario_name: str = "Meridian Research Incident",
+    metadata_lookup: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Generate a structured manifest containing SHA-256 hashes and file metadata.
 
@@ -30,6 +31,7 @@ def generate_manifest(
         directory: Directory containing evidence artifacts to index.
         base_dir: Base directory used to calculate relative paths. Defaults to directory.
         scenario_name: Name of the scenario context.
+        metadata_lookup: Optional mapping of relative file paths to extra artifact metadata.
 
     Returns:
         A dictionary containing manifest metadata and a list of artifact records.
@@ -50,12 +52,19 @@ def generate_manifest(
         file_stat = file_path.stat()
         file_hash = calculate_sha256(file_path)
 
-        artifacts.append({
+        entry: dict[str, Any] = {
             "path": rel_path,
             "sha256": file_hash,
             "size_bytes": file_stat.st_size,
             "modified_utc": datetime.fromtimestamp(file_stat.st_mtime, tz=timezone.utc).isoformat(),
-        })
+        }
+
+        if metadata_lookup and rel_path in metadata_lookup:
+            for key, val in metadata_lookup[rel_path].items():
+                if key not in entry:
+                    entry[key] = val
+
+        artifacts.append(entry)
 
     return {
         "manifest_version": "1.0.0",
@@ -64,6 +73,33 @@ def generate_manifest(
         "total_files": len(artifacts),
         "artifacts": artifacts,
     }
+
+
+def write_manifests(
+    scan_dir: str | Path,
+    manifest_dir: str | Path,
+    base_dir: str | Path | None = None,
+    scenario_name: str = "Meridian Research Incident",
+    metadata_lookup: dict[str, dict[str, Any]] | None = None,
+) -> tuple[Path, Path]:
+    """Generate and write SHA256SUMS and manifest.json to manifest_dir."""
+    m_dir = Path(manifest_dir).resolve()
+    m_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest_data = generate_manifest(
+        directory=scan_dir,
+        base_dir=base_dir,
+        scenario_name=scenario_name,
+        metadata_lookup=metadata_lookup,
+    )
+
+    sha256_path = m_dir / "SHA256SUMS"
+    sha256_path.write_text(format_sha256sums(manifest_data), encoding="utf-8")
+
+    json_path = m_dir / "manifest.json"
+    json_path.write_text(json.dumps(manifest_data, indent=2) + "\n", encoding="utf-8")
+
+    return sha256_path, json_path
 
 
 def format_sha256sums(manifest_data: dict[str, Any]) -> str:
