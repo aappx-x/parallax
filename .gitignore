@@ -1,0 +1,137 @@
+# ==============================================================================
+# PARALLAX — Repository Ignore Rules
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Python & Virtual Environments
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Packaging & Distribution
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing & Coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+
+# Type Checking & Linting
+.mypy_cache/
+.pyre/
+.pytype/
+.ruff_cache/
+
+# ------------------------------------------------------------------------------
+# Secrets & Local Environment Configuration
+# ------------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.secret
+secrets/
+*.pem
+*.key
+*.p12
+*.pfx
+*.pkcs12
+
+# ------------------------------------------------------------------------------
+# Operating System & Editor Artifacts
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory
+
+# IDEs & Editors
+.vscode/
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# ------------------------------------------------------------------------------
+# Virtual Machine Disks, Images & Hypervisor Artifacts
+# ------------------------------------------------------------------------------
+# UTM & QEMU bundles / images
+*.utm/
+*.utm
+*.qcow2
+*.qcow
+*.raw
+*.img
+*.iso
+*.vmdk
+*.vdi
+*.hdd
+
+# VM state and snapshots
+*.nvram
+*.snapshot
+*.vmstate
+*.sav
+
+# Packer / Vagrant / Cloud-Init build caches
+.vagrant/
+packer_cache/
+*.box
+
+# ------------------------------------------------------------------------------
+# Temporary Files & Local Logs
+# ------------------------------------------------------------------------------
+tmp/
+temp/
+*.log
+*.tmp
+*.bak
