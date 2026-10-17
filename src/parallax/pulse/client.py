@@ -124,3 +124,65 @@ class PulseClient:
         resp = self.send_and_receive(frame)
         self.close()
         return resp
+
+
+def main() -> int:
+    """CLI entrypoint for interactive PULSE/1 client."""
+    import argparse
+    import json
+    import sys
+
+    parser = argparse.ArgumentParser(description="PULSE/1 protocol CLI client.")
+    parser.add_argument("--host", default="127.0.0.1", help="PULSE/1 daemon host (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"PULSE/1 daemon port (default: {DEFAULT_PORT})")
+
+    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    subparsers.add_parser("hello", help="Send HELLO handshake")
+    subparsers.add_parser("status", help="Query service STATUS telemetry")
+
+    auth_parser = subparsers.add_parser("auth", help="Authenticate with service")
+    auth_parser.add_argument("--username", "-u", default="", help="Username")
+    auth_parser.add_argument("--password", "-p", default="", help="Password")
+
+    diag_parser = subparsers.add_parser("read-diag", help="Read diagnostic telemetry")
+    diag_parser.add_argument("--section", "-s", default="system_config", help="Diagnostic section (default: system_config)")
+
+    subparsers.add_parser("close", help="Send CLOSE frame to terminate session")
+    subparsers.add_parser("demo", help="Run authentication flaw demonstration")
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return 0
+
+    if args.command == "demo":
+        from parallax.pulse.demo import run_demo_suite
+        return run_demo_suite(host=args.host, port=args.port)
+
+    try:
+        with PulseClient(host=args.host, port=args.port) as client:
+            if args.command == "hello":
+                resp = client.hello()
+            elif args.command == "status":
+                resp = client.status()
+            elif args.command == "auth":
+                resp = client.auth(username=args.username, password=args.password)
+            elif args.command == "read-diag":
+                resp = client.read_diag(section=args.section)
+            elif args.command == "close":
+                resp = client.close_session()
+            else:
+                parser.print_help()
+                return 1
+
+            print(f"[{resp.msg_type.name}] {json.dumps(resp.payload, indent=2)}")
+    except ConnectionClosedError as err:
+        print(f"[!] Connection error: {err}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main())

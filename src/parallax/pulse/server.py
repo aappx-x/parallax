@@ -333,3 +333,9 @@ class PulseServer:
             },
         )
         return PulseFrame(msg_type=MessageType.READ_DIAG, payload=diag_section)
+
+
+if __name__ == "__main__":
+    import sys
+    from parallax.pulse.__main__ import main
+    sys.exit(main())
