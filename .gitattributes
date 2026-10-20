@@ -1,0 +1,8 @@
+# Auto-detect text files and normalize line endings
+* text=auto
+
+# Enforce POSIX LF line endings for cryptographic forensic evidence and system files
+evidence/** text eol=lf
+src/helper/** text eol=lf
+src/parallax/system/** text eol=lf
+tests/** text eol=lf

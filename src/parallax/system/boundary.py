@@ -83,11 +83,20 @@ BOUNDARY_SPEC: dict[str, dict[str, Any]] = {
 DEFAULT_C_SOURCE = Path(__file__).resolve().parent.parent.parent / "helper" / "pulse-helper.c"
 
 
+def find_c_compiler(preferred: str | None = None) -> str | None:
+    """Find an available C compiler in PATH."""
+    candidates = [preferred] if preferred else ["cc", "gcc", "clang"]
+    for cand in candidates:
+        if cand and shutil.which(cand):
+            return cand
+    return None
+
+
 def compile_helper(
     source_file: str | Path | None = None,
     output_binary: str | Path | None = None,
     fixed_mode: bool = False,
-    cc: str = "cc",
+    cc: str | None = None,
 ) -> Path:
     """Compile pulse-helper from C source.
 
@@ -95,7 +104,7 @@ def compile_helper(
         source_file: Path to pulse-helper.c. Defaults to src/helper/pulse-helper.c.
         output_binary: Path to destination binary. Defaults to adjacent binary name.
         fixed_mode: If True, compiles with -DFIXED_MODE (hardened).
-        cc: C compiler command (default: cc).
+        cc: Optional C compiler command (default: checks cc, gcc, clang in order).
 
     Returns:
         Path to compiled binary.
@@ -108,8 +117,9 @@ def compile_helper(
     if not src.is_file():
         raise FileNotFoundError(f"C source file not found at: {src}")
 
-    if not shutil.which(cc):
-        raise FileNotFoundError(f"C compiler '{cc}' not found in PATH")
+    compiler = find_c_compiler(cc)
+    if not compiler:
+        raise FileNotFoundError(f"C compiler '{cc or 'cc'}' not found in PATH")
 
     if output_binary:
         out = Path(output_binary)
@@ -119,9 +129,10 @@ def compile_helper(
 
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    cmd = [cc, "-Wall", "-Wextra", "-O2", "-std=c99", "-o", str(out), str(src)]
+    cmd = [compiler, "-Wall", "-Wextra", "-O2", "-std=c99"]
     if fixed_mode:
-        cmd.insert(5, "-DFIXED_MODE")
+        cmd.extend(["-DFIXED_MODE", "-fstack-protector-strong", "-D_FORTIFY_SOURCE=2"])
+    cmd.extend(["-o", str(out), str(src)])
 
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
@@ -131,6 +142,68 @@ def compile_helper(
 
     out.chmod(0o0755)
     return out
+
+
+def validate_identities() -> tuple[bool, list[str]]:
+    """Statically validate ground-truth user and group identity definitions."""
+    errors: list[str] = []
+    identities = [
+        ("analyst", ANALYST_UID, ANALYST_GID),
+        ("rhea", RHEA_UID, RHEA_GID),
+        ("svc-pulse", SVC_PULSE_UID, SVC_PULSE_GID),
+        ("root", ROOT_UID, ROOT_GID),
+    ]
+    uids = [uid for _, uid, _ in identities]
+    gids = [gid for _, _, gid in identities]
+    if len(set(uids)) != len(uids):
+        errors.append("Duplicate UID detected among ground-truth identities")
+    if len(set(gids)) != len(gids):
+        errors.append("Duplicate GID detected among ground-truth identities")
+    return (len(errors) == 0, errors)
+
+
+def validate_boundary_spec() -> tuple[bool, list[str]]:
+    """Statically validate the security boundary specification for consistency."""
+    errors: list[str] = []
+    for path, spec in BOUNDARY_SPEC.items():
+        if not path.startswith("/"):
+            errors.append(f"Path '{path}' must be absolute")
+        mode = spec.get("expected_mode")
+        if mode is None or not isinstance(mode, int):
+            errors.append(f"Path '{path}' has invalid or missing expected_mode")
+        if not spec.get("expected_owner"):
+            errors.append(f"Path '{path}' missing expected_owner")
+        if not spec.get("expected_group"):
+            errors.append(f"Path '{path}' missing expected_group")
+
+    # Verify helper permissions match service identity requirements
+    helper_spec = BOUNDARY_SPEC.get("/usr/local/bin/pulse-helper")
+    if helper_spec:
+        if helper_spec["expected_group"] != SVC_PULSE_USER:
+            errors.append(
+                f"Helper expected group must be '{SVC_PULSE_USER}', got '{helper_spec['expected_group']}'"
+            )
+        mode = helper_spec["expected_mode"]
+        if not (mode & 0o4000):
+            errors.append("Helper mode must have setuid bit (0o4000)")
+        if not (mode & 0o0010):
+            errors.append("Helper mode must allow group execution for svc-pulse")
+        if (mode & 0o0007) != 0:
+            errors.append("Helper mode must deny all permissions to other users (world)")
+
+    # Verify archive directory is restricted
+    archive_spec = BOUNDARY_SPEC.get("/var/archive/meridian")
+    if archive_spec:
+        if archive_spec["expected_mode"] != 0o0700:
+            errors.append("Archive directory must be restricted to mode 0700")
+
+    # Verify audit log is root-restricted
+    audit_spec = BOUNDARY_SPEC.get("/var/log/audit/audit.log")
+    if audit_spec:
+        if audit_spec["expected_mode"] != 0o0640:
+            errors.append("Audit log must have mode 0640")
+
+    return (len(errors) == 0, errors)
 
 
 def run_helper(

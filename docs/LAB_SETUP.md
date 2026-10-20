@@ -124,7 +124,7 @@ Run the complete unit and integration test suite:
 ```bash
 pytest -v
 ```
-Expected result: 93 passed tests.
+Expected result: 98 passed tests (on Linux/ARM64) or 90 passed, 8 skipped (on Windows/macOS without C compiler).
 
 ### B. Execute Repeatable Lab Verification Suite
 Run the self-contained verification tool:
@@ -329,3 +329,83 @@ Always ensure all running daemon processes and bound sockets are released before
 ### Issue 4: Connection refused when running client commands
 - **Cause**: The PULSE/1 server is not running or is bound to a different interface.
 - **Remedy**: Ensure the server was started with `--host 127.0.0.1 --port 7741` and check status using `ss -tulpn | grep 7741`.
+
+---
+
+## 9. Privileged Helper Security Model & Safe Linux Boundary Validation
+
+Milestone 5 validates the privileged helper security model on actual Ubuntu Linux, reconciles cross-platform UID/GID and shell behavior, and establishes safe, repeatable test procedures without installing live setuid binaries or altering host audit policy.
+
+### 9.1 Helper Architecture & Build Modes
+
+The maintenance helper (`src/helper/pulse-helper.c`) simulates an internal Meridian utility intended for verifying backup archive integrity:
+
+| Target | Build Command | Description | Security Posture |
+| :--- | :--- | :--- | :--- |
+| **`pulse-helper`** (Vulnerable) | `make pulse-helper` or `cc -Wall -Wextra -O2 -std=c99 -o pulse-helper pulse-helper.c` | Standard build using legacy `system()` dispatch. | Vulnerable to command injection via shell metacharacters in `--archive-check`. |
+| **`pulse-helper-fixed`** (Hardened) | `make pulse-helper-fixed` or `cc -Wall -Wextra -O2 -std=c99 -DFIXED_MODE -fstack-protector-strong -D_FORTIFY_SOURCE=2 -o pulse-helper-fixed pulse-helper.c` | Hardened reference build. | Path whitelist, metacharacter filtering, traversal blocking, permanent privilege drop (`setgid` + `setuid`), and direct `execv()` dispatch. |
+
+#### Building Both Modes Safely
+From within the repository root:
+```bash
+cd src/helper
+make
+./pulse-helper --version
+./pulse-helper-fixed --version
+```
+
+### 9.2 Real UID, Effective UID, and Linux Shell Privilege Behavior
+
+Modern Linux distributions enforce security safeguards that affect setuid process execution:
+
+1. **POSIX Identity Model**:
+   - When an unprivileged user (e.g., `svc-pulse`, UID 1002) executes a setuid-root binary (`chmod 4750 root:svc-pulse`), the Linux kernel establishes:
+     - Real UID (`ruid`) = 1002
+     - Effective UID (`euid`) = 0
+     - Saved Set-User-ID (`suid`) = 0
+2. **Ubuntu `/bin/sh` Privilege Dropping**:
+   - On Ubuntu, `/bin/sh` is symlinked to `dash` (Debian Almquist Shell).
+   - When `dash` (or `bash` in POSIX mode) starts without the `-p` (privileged) switch, it checks if `ruid != euid`.
+   - If `ruid != euid`, `dash` immediately resets `euid = ruid` (dropping effective privileges to the caller UID).
+   - Consequently, calling `system()` directly in a setuid binary causes `dash` to drop root privileges to `svc-pulse`.
+3. **Vulnerable Mode Ground-Truth Synchronization**:
+   - To authentically exhibit the scenario ground truth (where an attacker escalates from `svc-pulse` to `root` to append a record to root-only `/var/log/audit/audit.log`), classic setuid utilities synchronize `ruid` with `euid` via `setuid(0)` when running elevated.
+   - In `pulse-helper.c`, when `geteuid() == 0`, `setuid(0)` is invoked prior to `system()`. This synchronizes `ruid = 0`, ensuring that `/bin/sh` retains root execution.
+4. **Hardened Mode Privilege Drop**:
+   - In `pulse-helper-fixed`, the helper permanently drops both group and user privileges prior to subprocess execution:
+     ```c
+     setgid(getgid());  // Drop group privileges first
+     setuid(getuid());  // Drop root permanently to real caller UID
+     ```
+   - It replaces shell dispatch (`system()`) with direct `execv()` invocation of `/usr/bin/tar` or `/bin/tar`, rendering shell injection impossible.
+
+### 9.3 Safe Validation Procedure
+
+The automated test suite (`tests/test_boundary.py`) validates both helper modes without requiring root privileges, setuid installation, or host modifications:
+
+- **Isolated Temporary Directories**: Tests compile and execute helper binaries within isolated temporary workspaces (`tempfile.TemporaryDirectory`).
+- **Harmless Marker Files**: Injection testing uses safe canary markers (`touch <tmp_path>/pwned.canary`) within the temporary workspace. No files outside the temporary directory are accessed or created.
+- **Path Traversal & Boundary Tests**:
+  - Direct traversal attempts (`f"{archive_dir}/../secret.txt"`) are rejected.
+  - Out-of-bounds paths (`/etc/passwd`) are rejected.
+  - Sibling directory prefix collision attacks (`f"{archive_dir}_evil/payload.tar.gz"` vs `archive_dir`) are strictly blocked by directory boundary validation.
+- **Shell Metacharacter Validation**: Verifies rejection of `;`, `&`, `|`, `&&`, `||`, `` ` ``, `$()`, `>`, `<`, and `\n`.
+- **Legitimate Archive Functionality**: Verifies that genuine `.tar.gz` archives pass validation and integrity checking in both modes without breaking operational requirements.
+
+### 9.4 What the Tests Demonstrate vs What Remains Unverified
+
+#### What the Tests Demonstrate:
+- Command injection vectors are reliably reproducible in `pulse-helper`.
+- The hardened helper rejects all metacharacters, traversal sequences, and unauthorized directory paths.
+- The hardened helper successfully validates genuine compressed tar archives.
+- Systemd service unit files and auditd rules conform to security best practices and least-privilege configurations.
+- Evidence workspaces maintain cryptographic SHA-256 integrity across operating systems.
+
+#### What Remains Unverified (Requires Live Isolated VM):
+- **Live Setuid Execution**: Testing whether a live binary with mode `4750` owned by `root:svc-pulse` escalates privileges under an actual non-root user (`svc-pulse`) requires live root installation (`sudo chown root:svc-pulse ... && sudo chmod 4750 ...`).
+- **Live Kernel Audit Logging**: Validating that `/usr/local/bin/pulse-helper` triggers kernel `SYSCALL` events in `/var/log/audit/audit.log` requires active kernel audit subsystem loading (`auditctl -R /etc/audit/rules.d/audit.rules`).
+- **Systemd Service Cgroup Isolation**: Validating `ProtectSystem=full` and `PrivateTmp=true` mount namespace isolation requires live unit startup via `systemctl start pulse.service`.
+
+> [!CAUTION]
+> **Safety Notice**: Do not install setuid-root binaries, create local system accounts, or load active kernel audit rules on development host machines. Live privilege boundary tests must only be conducted in a dedicated, isolated guest VM (such as the reference UTM ARM64 VM).
+
