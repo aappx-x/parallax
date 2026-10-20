@@ -124,7 +124,7 @@ Run the complete unit and integration test suite:
 ```bash
 pytest -v
 ```
-Expected result: 71 passed tests.
+Expected result: 93 passed tests.
 
 ### B. Execute Repeatable Lab Verification Suite
 Run the self-contained verification tool:
@@ -149,10 +149,16 @@ Expected output:
        Details: Flaw verified: READ_DIAG permitted after failed AUTH (helper_path=/usr/local/bin/pulse-helper)
 [PASS] Corrected Defense Enforcement
        Details: Defense verified: READ_DIAG rejected with 403 Forbidden after failed AUTH
+[PASS] Privileged Helper & Boundary Flaw
+       Details: C helper compiled cleanly; vulnerable injection reproduced and hardened execv() verified
+[PASS] Linux Security Boundaries
+       Details: Specs valid. Linux host audit: <compliant-count>/5 boundary paths present on filesystem
 [PASS] Demo Suite Execution
        Details: Self-contained demo suite completed both vulnerable and corrected modes
 [PASS] Manifest Subsystem
        Details: SHA-256 calculation, manifest generation, and tamper detection passed
+[PASS] Workspace Evidence Integrity
+       Details: All 4 raw evidence artifacts verified against SHA-256 manifest
 ======================================================================
 [+] ALL VERIFICATION CHECKS PASSED.
 ```

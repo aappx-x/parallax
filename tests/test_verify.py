@@ -51,6 +51,20 @@ def test_verify_workspace_evidence():
     assert "verified against SHA-256 manifest" in res.details
 
 
+def test_verify_privileged_helper():
+    verifier = LabVerifier()
+    res = verifier.verify_privileged_helper()
+    assert res.passed is True
+    assert "C helper compiled cleanly" in res.details
+
+
+def test_verify_linux_boundaries():
+    verifier = LabVerifier()
+    res = verifier.verify_linux_boundaries()
+    assert res.passed is True
+    assert "Specs valid" in res.details
+
+
 def test_run_verification_runner():
     exit_code = run_verification(host="127.0.0.1", verbose=False)
     assert exit_code == 0

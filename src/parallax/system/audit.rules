@@ -1,0 +1,5 @@
+## PARALLAX — Meridian Research Lab Audit Rules
+## Records kernel execve syscalls for pulse-helper to maintain ground-truth process lineage.
+
+# Record all 64-bit execve syscalls on the system
+-a always,exit -F arch=b64 -S execve -F path=/usr/local/bin/pulse-helper -k pulse_helper_exec

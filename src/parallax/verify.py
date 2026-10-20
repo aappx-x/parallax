@@ -27,6 +27,15 @@ from parallax.pulse.client import PulseClient
 from parallax.pulse.constants import MessageType
 from parallax.pulse.demo import run_demo_suite, run_flaw_demo
 from parallax.pulse.server import PulseServer
+from parallax.system.boundary import (
+    audit_host_boundaries,
+    compile_helper,
+    parse_audit_rules,
+    parse_systemd_unit,
+    run_helper,
+    validate_audit_rules,
+    validate_systemd_unit,
+)
 
 
 @dataclasses.dataclass
@@ -240,6 +249,86 @@ class LabVerifier:
             f"All {count} raw evidence artifacts verified against SHA-256 manifest",
         )
 
+    def verify_privileged_helper(self) -> CheckResult:
+        """Verify pulse-helper compilation and command injection vulnerability reproduction."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+
+            try:
+                vuln_bin = compile_helper(output_binary=tmp_path / "pulse-helper", fixed_mode=False)
+                fixed_bin = compile_helper(output_binary=tmp_path / "pulse-helper-fixed", fixed_mode=True)
+            except Exception as e:
+                return CheckResult(
+                    "Privileged Helper & Boundary Flaw",
+                    False,
+                    f"Failed to compile pulse-helper: {e}",
+                )
+
+            # Test vulnerable injection reproduction
+            canary_file = tmp_path / "canary.txt"
+            injected_arg = f"/var/archive/meridian/test.tar.gz; touch {canary_file.resolve()}"
+            run_helper(vuln_bin, archive_path=injected_arg)
+            if not canary_file.exists():
+                return CheckResult(
+                    "Privileged Helper & Boundary Flaw",
+                    False,
+                    "Vulnerable helper failed to reproduce command injection via system()",
+                )
+
+            # Test hardened helper blocks injection
+            canary_fixed = tmp_path / "canary_fixed.txt"
+            injected_fixed = f"{tmp_path}/test.tar.gz; touch {canary_fixed.resolve()}"
+            run_helper(fixed_bin, archive_path=injected_fixed, archive_dir=str(tmp_path))
+            if canary_fixed.exists():
+                return CheckResult(
+                    "Privileged Helper & Boundary Flaw",
+                    False,
+                    "Hardened helper executed injected command unexpectedly",
+                )
+
+        return CheckResult(
+            "Privileged Helper & Boundary Flaw",
+            True,
+            "C helper compiled cleanly; vulnerable injection reproduced and hardened execv() verified",
+        )
+
+    def verify_linux_boundaries(self) -> CheckResult:
+        """Verify Linux systemd service unit, auditd rules, and boundary specifications."""
+        sys_dir = Path(__file__).resolve().parent / "system"
+        service_file = sys_dir / "pulse.service"
+        rules_file = sys_dir / "audit.rules"
+
+        if not service_file.is_file():
+            return CheckResult("Linux Security Boundaries", False, f"Missing {service_file}")
+        if not rules_file.is_file():
+            return CheckResult("Linux Security Boundaries", False, f"Missing {rules_file}")
+
+        unit_dict = parse_systemd_unit(service_file)
+        unit_valid, unit_errs = validate_systemd_unit(unit_dict)
+        if not unit_valid:
+            return CheckResult("Linux Security Boundaries", False, f"Invalid pulse.service: {unit_errs}")
+
+        rules_list = parse_audit_rules(rules_file)
+        rules_valid, rules_errs = validate_audit_rules(rules_list)
+        if not rules_valid:
+            return CheckResult("Linux Security Boundaries", False, f"Invalid audit.rules: {rules_errs}")
+
+        # Check host boundaries if on Linux, otherwise report platform state
+        host_audit = audit_host_boundaries()
+        if host_audit["platform"]["is_linux"]:
+            installed_count = sum(1 for p in host_audit["paths"].values() if p["exists"])
+            details = (
+                f"Specs valid. Linux host audit: {installed_count}/{len(host_audit['paths'])} "
+                f"boundary paths present on filesystem"
+            )
+        else:
+            details = (
+                f"Specs valid (systemd unit & auditd rules). "
+                f"Host DAC inspection deferred on {host_audit['platform']['system']}/{host_audit['platform']['machine']}"
+            )
+
+        return CheckResult("Linux Security Boundaries", True, details)
+
     def run_all(self) -> list[CheckResult]:
         """Run all verification checks in deterministic order."""
         checks = [
@@ -247,6 +336,8 @@ class LabVerifier:
             self.verify_server_lifecycle,
             self.verify_vulnerable_flaw,
             self.verify_corrected_defense,
+            self.verify_privileged_helper,
+            self.verify_linux_boundaries,
             self.verify_demo_suite,
             self.verify_manifest_subsystem,
             self.verify_workspace_evidence,

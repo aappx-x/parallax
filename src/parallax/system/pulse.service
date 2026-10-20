@@ -1,0 +1,24 @@
+[Unit]
+Description=PULSE/1 Telemetry Service (Meridian Research)
+After=network.target
+Documentation=https://github.com/aappx-x/parallax
+
+[Service]
+Type=simple
+User=svc-pulse
+Group=svc-pulse
+WorkingDirectory=/var/log/pulse
+ExecStart=/usr/bin/python3 -m parallax.pulse server --host 127.0.0.1 --port 7741 --vulnerable
+Restart=on-failure
+RestartSec=5s
+Slice=system.slice
+
+# Logging and Isolation Boundaries
+StandardOutput=append:/var/log/pulse/pulse.log
+StandardError=append:/var/log/pulse/pulse.log
+ProtectSystem=full
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
