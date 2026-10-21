@@ -40,6 +40,13 @@ from parallax.system.boundary import (
     validate_identities,
     validate_systemd_unit,
 )
+from parallax.objectives import (
+    OBJECTIVES,
+    OBJECTIVES_BY_ID,
+    ProgressTracker,
+    generate_final_report,
+    validate_submission,
+)
 
 
 @dataclasses.dataclass
@@ -367,6 +374,103 @@ class LabVerifier:
 
         return CheckResult("Linux Security Boundaries", True, details)
 
+    def verify_investigation_scenario(self) -> CheckResult:
+        """Verify the 15 investigation objectives, validation engine, and final incident verdict."""
+        if len(OBJECTIVES) != 15:
+            return CheckResult(
+                "Investigation Scenario & Objectives Engine",
+                False,
+                f"Expected 15 objectives, found {len(OBJECTIVES)}",
+            )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            progress_file = Path(tmp_dir) / ".progress.json"
+            tracker = ProgressTracker(progress_file)
+
+            # Test prerequisite enforcement: P15 locked initially
+            p15 = OBJECTIVES_BY_ID["P15"]
+            if tracker.get_status(p15) != "LOCKED":
+                return CheckResult(
+                    "Investigation Scenario & Objectives Engine",
+                    False,
+                    "P15 final verdict was not locked initially",
+                )
+
+            # Test rejection of bad answer without spoiling
+            res_bad = validate_submission("P01", "port 9999", ["EV-CFG-001"], tracker=tracker)
+            if res_bad.success:
+                return CheckResult(
+                    "Investigation Scenario & Objectives Engine",
+                    False,
+                    "Incorrect answer was unexpectedly accepted for P01",
+                )
+
+            # Solve P01 through P14
+            ground_truth = [
+                ("P01", "TCP port 7741", ["EV-CFG-001"]),
+                ("P02", "PULS magic identifier (0x50554c53)", ["EV-NET-001"]),
+                ("P03", "198.51.100.24", ["EV-NET-001"]),
+                ("P04", "READ_DIAG (0x04)", ["EV-NET-001"]),
+                ("P05", "420 seconds", ["EV-NET-002"]),
+                ("P06", "Optical tap hardware RTC drift corroborated by invariant delta across paired session events", ["EV-NET-002", "EV-LOG-001"]),
+                ("P07", "Leaked /usr/local/bin/pulse-helper and DIAG-TKT-7741-ALPHA (fragA)", ["EV-NET-001"]),
+                ("P08", "svc-pulse (UID 1002) with 4750 setuid helper", ["EV-SYS-001", "EV-SYS-003"]),
+                ("P09", "Unsafe --archive-check passed to system() with root privileges", ["EV-SYS-003", "EV-CFG-001"]),
+                ("P10", "Unlocked vault with fragB-sig9902 revealing MERIDIAN-AERO-VAULT-v2.4", ["EV-DAT-001", "EV-DAT-002"]),
+                ("P11", "Audit event 894 attributed tar to rhea (1001)", ["EV-LOG-002"]),
+                ("P12", "Auth.log shows zero PAM sessions for rhea, wtmp shows no terminal, clean history", ["EV-LOG-003", "EV-LOG-004"]),
+                ("P13", "Pulse-helper PID 1418 spawned by PULSE daemon PPID 1412 under svc-pulse", ["EV-LOG-002", "EV-SRV-001"]),
+                ("P14", "Orphan EXECVE missing companion kernel SYSCALL with unset ses=4294967295", ["EV-LOG-002"]),
+            ]
+
+            for oid, ans, ev_ids in ground_truth:
+                res = validate_submission(oid, ans, ev_ids, tracker=tracker)
+                if not res.success:
+                    return CheckResult(
+                        "Investigation Scenario & Objectives Engine",
+                        False,
+                        f"Objective {oid} validation failed on valid answer: {res.message}",
+                    )
+
+            # P15 is now unlocked
+            if tracker.get_status(p15) != "UNLOCKED":
+                return CheckResult(
+                    "Investigation Scenario & Objectives Engine",
+                    False,
+                    "P15 final verdict failed to unlock after P01-P14 completion",
+                )
+
+            # Submit P15 final verdict
+            res_p15 = validate_submission(
+                "P15",
+                "Attacker from 198.51.100.24 exploited PULSE/1 port 7741 unauthenticated READ_DIAG flaw. "
+                "Privilege escalation achieved via setuid pulse-helper --archive-check command injection under svc-pulse. "
+                "7-minute clock offset explained by 420-second optical tap RTC drift in capture.meta. "
+                "Employee rhea is exonerated against fabricated orphan audit record with multi-source alibi.",
+                ["EV-NET-001", "EV-LOG-001", "EV-LOG-002", "EV-SYS-003"],
+                tracker=tracker,
+            )
+            if not res_p15.success:
+                return CheckResult(
+                    "Investigation Scenario & Objectives Engine",
+                    False,
+                    f"P15 final verdict rejected: {res_p15.message}",
+                )
+
+            report = generate_final_report(tracker=tracker)
+            if "EMPLOYEE RHEA VANCE IS FULLY EXONERATED" not in report:
+                return CheckResult(
+                    "Investigation Scenario & Objectives Engine",
+                    False,
+                    "Generated incident report missing employee exoneration verdict",
+                )
+
+        return CheckResult(
+            "Investigation Scenario & Objectives Engine",
+            True,
+            "All 15 objectives verified, prerequisite gating enforced, and ground-truth verdict synthesized",
+        )
+
     def run_all(self) -> list[CheckResult]:
         """Run all verification checks in deterministic order."""
         checks = [
@@ -379,6 +483,7 @@ class LabVerifier:
             self.verify_demo_suite,
             self.verify_manifest_subsystem,
             self.verify_workspace_evidence,
+            self.verify_investigation_scenario,
         ]
 
         self.results = []

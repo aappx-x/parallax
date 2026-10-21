@@ -62,7 +62,13 @@ def test_verify_linux_boundaries():
     verifier = LabVerifier()
     res = verifier.verify_linux_boundaries()
     assert res.passed is True
-    assert "Specs valid" in res.details
+
+
+def test_verify_investigation_scenario():
+    verifier = LabVerifier()
+    res = verifier.verify_investigation_scenario()
+    assert res.passed is True
+    assert "All 15 objectives verified" in res.details
 
 
 def test_run_verification_runner():
