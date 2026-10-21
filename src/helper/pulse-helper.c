@@ -162,8 +162,9 @@ static int execute_archive_check_vulnerable(const char *archive_path) {
         }
     }
 
+    const char *tar_bin = (access("/bin/tar", X_OK) == 0) ? "/bin/tar" : ((access("/usr/bin/tar", X_OK) == 0) ? "/usr/bin/tar" : "tar");
     char cmd[512];
-    int written = snprintf(cmd, sizeof(cmd), "/bin/tar -tzf %s >/dev/null 2>&1", archive_path);
+    int written = snprintf(cmd, sizeof(cmd), "%s -tzf %s >/dev/null 2>&1", tar_bin, archive_path);
     if (written < 0 || (size_t)written >= sizeof(cmd)) {
         fprintf(stderr, "[-] Error: command buffer overflow\n");
         return 1;
