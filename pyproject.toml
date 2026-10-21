@@ -21,6 +21,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+parallax = "parallax.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
