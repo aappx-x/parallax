@@ -1,0 +1,7 @@
+git status
+git pull origin main
+python3 run_orbital_simulation.py --steps 1000 --config configs/flight_profile.yaml
+cat output/telemetry_summary.csv | head -n 20
+pytest tests/test_trajectory.py
+vim docs/calibration_notes.md
+exit

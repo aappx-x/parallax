@@ -1,44 +1,164 @@
 {
   "manifest_version": "1.0.0",
   "scenario": "Meridian Research Incident",
-  "generated_utc": "2026-10-17T11:19:57.681857+00:00",
-  "total_files": 4,
+  "generated_utc": "2026-10-21T01:35:14.257268+00:00",
+  "total_files": 16,
   "artifacts": [
+    {
+      "path": "raw/data/diag_ticket",
+      "sha256": "c4edec781d3bc7e6fef7e3654a554f3f6934c7aeec6f86a79c50a8db11f1769c",
+      "size_bytes": 441,
+      "modified_utc": "2026-10-21T01:35:14.256333+00:00",
+      "evidence_id": "EV-DAT-002",
+      "source_system": "meridian-lab",
+      "format": "application/json",
+      "description": "Synthetic diagnostic token remnant (/var/tmp/.diag_ticket) with key material"
+    },
+    {
+      "path": "raw/data/research_vault.tar.gz.enc",
+      "sha256": "77bedac32d61fe3945186de0dab0f68579bb561217c17f481105f711fbfa6386",
+      "size_bytes": 192,
+      "modified_utc": "2026-10-21T01:35:14.256276+00:00",
+      "evidence_id": "EV-DAT-001",
+      "source_system": "meridian-lab",
+      "format": "application/octet-stream",
+      "description": "Synthetic encrypted research archive vault (/var/archive/meridian/research_vault.tar.gz.enc)"
+    },
+    {
+      "path": "raw/logs/audit.log",
+      "sha256": "d960e171ff2a56994ace444cd65caf671a46d0d4374c5fb89ca9525da7964d24",
+      "size_bytes": 2570,
+      "modified_utc": "2026-10-21T01:35:14.238735+00:00",
+      "evidence_id": "EV-LOG-002",
+      "source_system": "meridian-lab",
+      "format": "text/audit",
+      "description": "Synthetic Linux audit log (/var/log/audit/audit.log) containing genuine and forged records"
+    },
+    {
+      "path": "raw/logs/auth.log",
+      "sha256": "d9849ff9f65775763feec7e0f4da61d2f6d101100da134d98501859e79b5bebc",
+      "size_bytes": 1150,
+      "modified_utc": "2026-10-21T01:35:14.238778+00:00",
+      "evidence_id": "EV-LOG-003",
+      "source_system": "meridian-lab",
+      "format": "text/syslog",
+      "description": "Synthetic PAM authentication log (/var/log/auth.log) establishing rhea alibi"
+    },
+    {
+      "path": "raw/logs/pulse.log",
+      "sha256": "7cf80047c368d93908bb0db6c8f76bfde49504544c4dda90f6c872acde25d974",
+      "size_bytes": 1648,
+      "modified_utc": "2026-10-21T01:35:14.238690+00:00",
+      "evidence_id": "EV-LOG-001",
+      "source_system": "meridian-lab",
+      "format": "text/log",
+      "description": "Synthetic host PULSE/1 daemon application log (/var/log/pulse/pulse.log)"
+    },
+    {
+      "path": "raw/logs/wtmp.json",
+      "sha256": "3734702f54a2c470265fb17ec462bc11e83d96eba49a989acdb8a28debf18985",
+      "size_bytes": 645,
+      "modified_utc": "2026-10-21T01:35:14.238835+00:00",
+      "evidence_id": "EV-LOG-004",
+      "source_system": "meridian-lab",
+      "format": "application/json",
+      "description": "Synthetic terminal session inventory snapshot (/var/log/wtmp)"
+    },
     {
       "path": "raw/network/capture.meta",
       "sha256": "4a837b383dcc89b3d2bbcd1b18eb6760ea7652aa25f4337d93394252d0620684",
       "size_bytes": 1068,
-      "modified_utc": "2026-10-17T11:19:57.681113+00:00",
+      "modified_utc": "2026-10-21T01:35:14.238494+00:00",
       "evidence_id": "EV-NET-002",
       "source_system": "TAP-MERIDIAN-01",
       "format": "application/json",
       "description": "Synthetic network tap capture metadata documenting hardware clock offset (-420s)"
     },
     {
+      "path": "raw/network/capture.pcap",
+      "sha256": "05979f27154f980348e314182f626db47e183bff623bd3c3829976183b57cea9",
+      "size_bytes": 1725,
+      "modified_utc": "2026-10-21T01:35:14.238636+00:00",
+      "evidence_id": "EV-NET-003",
+      "source_system": "TAP-MERIDIAN-01",
+      "format": "application/vnd.tcpdump.pcap",
+      "description": "Synthetic raw packet capture (PCAP) recording PULSE/1 TCP wire session"
+    },
+    {
       "path": "raw/network/pulse_session.transcript",
       "sha256": "e0bcc39236827c83532c89f69452979ab91d2bf9959a2babb686ddb80c2db7ff",
       "size_bytes": 2325,
-      "modified_utc": "2026-10-17T11:19:57.681035+00:00",
+      "modified_utc": "2026-10-21T01:35:14.238310+00:00",
       "evidence_id": "EV-NET-001",
       "source_system": "TAP-MERIDIAN-01",
       "format": "text/transcript",
       "description": "Synthetic wire communication transcript of PULSE/1 session on port 7741"
     },
     {
+      "path": "raw/system/file_permissions.json",
+      "sha256": "a6ccc2ff705379724ae555939e64cfe8f62307ca170f05d6a3c9eb6f6bc544f6",
+      "size_bytes": 1664,
+      "modified_utc": "2026-10-21T01:35:14.239199+00:00",
+      "evidence_id": "EV-SYS-003",
+      "source_system": "meridian-lab",
+      "format": "application/json",
+      "description": "Synthetic discretionary access control and setuid file permissions snapshot"
+    },
+    {
+      "path": "raw/system/group",
+      "sha256": "0c04cf175833790816422e0f35828d0a2c96c090c79ceef931d76ad69cd7b97b",
+      "size_bytes": 137,
+      "modified_utc": "2026-10-21T01:35:14.239142+00:00",
+      "evidence_id": "EV-SYS-002",
+      "source_system": "meridian-lab",
+      "format": "text/group",
+      "description": "Synthetic group membership database snapshot (/etc/group)"
+    },
+    {
+      "path": "raw/system/passwd",
+      "sha256": "a4e807ed3341aecb14afc5144cce4fa4c829821d303f922395bd7d55a1443665",
+      "size_bytes": 565,
+      "modified_utc": "2026-10-21T01:35:14.239105+00:00",
+      "evidence_id": "EV-SYS-001",
+      "source_system": "meridian-lab",
+      "format": "text/passwd",
+      "description": "Synthetic user account database snapshot (/etc/passwd)"
+    },
+    {
       "path": "raw/system/pulse.conf",
       "sha256": "b829ff66c1a7afc9c2a32821e48800c445d50c52a6bb66ea2da150fdf00e58f9",
       "size_bytes": 640,
-      "modified_utc": "2026-10-17T11:19:57.681178+00:00",
+      "modified_utc": "2026-10-21T01:35:14.238884+00:00",
       "evidence_id": "EV-CFG-001",
       "source_system": "meridian-lab",
       "format": "text/ini",
       "description": "Synthetic PULSE/1 daemon configuration file snapshot (/etc/pulse/pulse.conf)"
     },
     {
+      "path": "raw/system/pulse.service",
+      "sha256": "10bbc6cd794766987c71307dfe15a382a47890b2faaee1a707763adb3f70e5db",
+      "size_bytes": 363,
+      "modified_utc": "2026-10-21T01:35:14.238931+00:00",
+      "evidence_id": "EV-CFG-002",
+      "source_system": "meridian-lab",
+      "format": "text/systemd",
+      "description": "Synthetic systemd unit configuration (/etc/systemd/system/pulse.service)"
+    },
+    {
+      "path": "raw/system/rhea_bash_history",
+      "sha256": "8b1e7e30f4f7517e5f8bb297084c4d23a8a1c74a38e3b6a33a949b0ea7afa77a",
+      "size_bytes": 229,
+      "modified_utc": "2026-10-21T01:35:14.239237+00:00",
+      "evidence_id": "EV-USR-001",
+      "source_system": "meridian-lab",
+      "format": "text/plain",
+      "description": "Synthetic shell command history snapshot for user rhea (/home/rhea/.bash_history)"
+    },
+    {
       "path": "raw/system/service_inventory.json",
       "sha256": "07c6d7ceb6b0d6ddd8b1161663e26172906a2efe29ed1211a5fb91231933b76c",
       "size_bytes": 736,
-      "modified_utc": "2026-10-17T11:19:57.681235+00:00",
+      "modified_utc": "2026-10-21T01:35:14.239059+00:00",
       "evidence_id": "EV-SRV-001",
       "source_system": "meridian-lab",
       "format": "application/json",

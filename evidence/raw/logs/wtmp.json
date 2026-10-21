@@ -1,0 +1,26 @@
+{
+  "evidence_id": "EV-LOG-004",
+  "scenario": "Meridian Research Incident",
+  "source": "/var/log/wtmp",
+  "extracted_utc": "2026-09-14T06:00:00Z",
+  "active_sessions_at_breach_window": [
+    {
+      "user": "analyst",
+      "uid": 1000,
+      "terminal": "pts/0",
+      "host": "10.0.4.1",
+      "login_utc": "2026-09-14T01:15:22Z",
+      "logout_utc": null,
+      "state": "logged_in"
+    }
+  ],
+  "historical_sessions_summary": {
+    "rhea": {
+      "uid": 1001,
+      "last_login_utc": "2026-09-11T14:10:00Z",
+      "last_logout_utc": "2026-09-11T17:45:00Z",
+      "last_terminal": "pts/1",
+      "sessions_on_incident_date": 0
+    }
+  }
+}

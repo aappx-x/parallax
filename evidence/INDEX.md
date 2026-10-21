@@ -1,6 +1,6 @@
 # PARALLAX — Evidence Artifact Index
 
-This index documents all raw forensic artifacts collected for the **Meridian Research Incident** (Milestone 3).
+This index documents all raw forensic artifacts collected for the **Meridian Research Incident** (Milestone 6).
 
 ---
 
@@ -8,38 +8,56 @@ This index documents all raw forensic artifacts collected for the **Meridian Res
 
 | Evidence ID | Path | Format | Source System | Ground Truth Role | Integrity Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`EV-NET-001`** | `raw/network/pulse_session.transcript` | `text/transcript` | `TAP-MERIDIAN-01` | PULSE/1 session wire transcript demonstrating auth flaw | Indexed in `manifest.json` |
+| **`EV-NET-001`** | `raw/network/pulse_session.transcript` | `text/transcript` | `TAP-MERIDIAN-01` | PULSE/1 wire transcript demonstrating auth flaw | Indexed in `manifest.json` |
 | **`EV-NET-002`** | `raw/network/capture.meta` | `application/json` | `TAP-MERIDIAN-01` | Optical tap metadata documenting -420s clock drift | Indexed in `manifest.json` |
+| **`EV-NET-003`** | `raw/network/capture.pcap` | `application/vnd.tcpdump.pcap` | `TAP-MERIDIAN-01` | Raw packet capture with wire frames and TCP handshake | Indexed in `manifest.json` |
+| **`EV-LOG-001`** | `raw/logs/pulse.log` | `text/log` | `meridian-lab` | Host application log showing connections, auth failure, leaked diag | Indexed in `manifest.json` |
+| **`EV-LOG-002`** | `raw/logs/audit.log` | `text/audit` | `meridian-lab` | Kernel audit log: genuine helper syscalls + 1 forged record | Indexed in `manifest.json` |
+| **`EV-LOG-003`** | `raw/logs/auth.log` | `text/syslog` | `meridian-lab` | Host authentication log demonstrating rhea alibi (no PAM sessions) | Indexed in `manifest.json` |
+| **`EV-LOG-004`** | `raw/logs/wtmp.json` | `application/json` | `meridian-lab` | Terminal session inventory snapshot proving no sessions for rhea | Indexed in `manifest.json` |
 | **`EV-CFG-001`** | `raw/system/pulse.conf` | `text/ini` | `meridian-lab` | Service configuration snapshot (/etc/pulse/pulse.conf) | Indexed in `manifest.json` |
+| **`EV-CFG-002`** | `raw/system/pulse.service` | `text/systemd` | `meridian-lab` | Service systemd unit definition (/etc/systemd/system/pulse.service) | Indexed in `manifest.json` |
 | **`EV-SRV-001`** | `raw/system/service_inventory.json` | `application/json` | `meridian-lab` | Host service footprint inventory (/etc/systemd) | Indexed in `manifest.json` |
+| **`EV-SYS-001`** | `raw/system/passwd` | `text/passwd` | `meridian-lab` | User account database snapshot (/etc/passwd) | Indexed in `manifest.json` |
+| **`EV-SYS-002`** | `raw/system/group` | `text/group` | `meridian-lab` | Group database snapshot (/etc/group) | Indexed in `manifest.json` |
+| **`EV-SYS-003`** | `raw/system/file_permissions.json` | `application/json` | `meridian-lab` | Discretionary access control & setuid permissions inventory | Indexed in `manifest.json` |
+| **`EV-USR-001`** | `raw/system/rhea_bash_history` | `text/plain` | `meridian-lab` | Shell history for user rhea proving absence of archive commands | Indexed in `manifest.json` |
+| **`EV-DAT-001`** | `raw/data/research_vault.tar.gz.enc` | `application/octet-stream` | `meridian-lab` | Encrypted research archive vault in /var/archive/meridian | Indexed in `manifest.json` |
+| **`EV-DAT-002`** | `raw/data/diag_ticket` | `application/json` | `meridian-lab` | Diagnostic ticket token remnant in /var/tmp/.diag_ticket | Indexed in `manifest.json` |
 
 ---
 
 ## 2. Artifact Details, Purpose & Limitations
 
-### EV-NET-001: PULSE/1 Communication Transcript (`raw/network/pulse_session.transcript`)
+### EV-NET-001 & EV-NET-003: PULSE/1 Wire Transcripts & Packet Capture
 - **Origin**: Upstream optical network tap `TAP-MERIDIAN-01` on SPAN interface `eth0-span`.
-- **Purpose**: Records the chronological wire-level exchange between client `198.51.100.24:49822` and host service `10.0.4.15:7741`. Demonstrates that after submitting invalid credentials (`AUTH`), the client successfully dispatched a `READ_DIAG` frame and received sensitive internal parameters (`helper_path`, `diagnostic_ticket`, `encryption_passphrase_fragment`).
-- **Facts vs Hypotheses**: The transcript establishes that an unauthenticated client received sensitive diagnostics over TCP port 7741. It does **not** prove the physical identity of the human attacker, nor does it establish whether the leaked helper was subsequently executed on the host.
-- **Limitations & Clock Skew**: Timestamps reflect the internal clock of the hardware tap, which was lagging true UTC by 420 seconds (7 minutes).
+- **Purpose**: Records the chronological wire exchange between client `198.51.100.24:49822` and host service `10.0.4.15:7741`. Demonstrates that after submitting invalid credentials (`AUTH`), the client successfully dispatched a `READ_DIAG` frame and received sensitive parameters (`helper_path`, `diagnostic_ticket`, `encryption_passphrase_fragment`).
+- **Limitations & Clock Skew**: Timestamps reflect tap RTC time lagging true UTC by 420 seconds (7 minutes).
 
 ### EV-NET-002: Upstream Network Tap Metadata (`raw/network/capture.meta`)
 - **Origin**: Management control-plane diagnostic export from tap appliance `TAP-MERIDIAN-01`.
-- **Purpose**: Documents the hardware capture environment, interface mapping, capture window, and clock synchronization status (`DEGRADED`, `clock_offset_seconds: -420`).
-- **Facts vs Hypotheses**: The metadata provides an empirical source statement regarding hardware RTC drift. **Important**: A uniform timestamp difference alone must not be represented as definitive proof of its cause; independent corroboration against host event logs is required.
-- **Limitations**: Control-plane metadata is an operational record, not an immutable cryptographic proof.
+- **Purpose**: Documents hardware capture environment, interface mapping, capture window, and clock synchronization status (`DEGRADED`, `clock_offset_seconds: -420`).
+- **Facts vs Hypotheses**: Metadata documents hardware drift. Corroboration against host logs is required to prove operational drift vs timestomping.
 
-### EV-CFG-001: PULSE/1 Service Configuration (`raw/system/pulse.conf`)
-- **Origin**: File seized from target host filesystem at `/etc/pulse/pulse.conf`.
-- **Purpose**: Confirms service operational parameters: TCP port `7741`, dedicated service user `svc-pulse`, maintenance helper path `/usr/local/bin/pulse-helper`, and archive repository `/var/archive/meridian`.
-- **Facts vs Hypotheses**: Demonstrates the intended on-disk configuration. Does not guarantee that runtime processes adhered to these parameters if configuration was modified or loaded dynamically.
-- **Limitations**: Static on-disk state snapshot.
+### EV-LOG-001: PULSE/1 Daemon Application Log (`raw/logs/pulse.log`)
+- **Origin**: Host log `/var/log/pulse/pulse.log` recorded under true UTC host system time.
+- **Purpose**: Confirms connection events, failed authentication, unauthenticated diagnostic dispatch, and helper execution at timestamps exactly +420s ahead of tap records.
 
-### EV-SRV-001: Service Inventory Snapshot (`raw/system/service_inventory.json`)
-- **Origin**: Output of automated initial triage script executed on `meridian-lab` (`10.0.4.15`).
-- **Purpose**: Corroborates that `pulse.service` was actively running under `MainPID=1412` and owned cgroup `system.slice/pulse.service`.
-- **Facts vs Hypotheses**: Confirms process existence and binding to port 7741 at the time of triage collection. Does not establish which specific requests PID 1412 handled.
-- **Limitations**: Point-in-time triage capture.
+### EV-LOG-002: Linux Audit Log (`raw/logs/audit.log`)
+- **Origin**: Host `/var/log/audit/audit.log` generated by kernel audit subsystem via `/etc/audit/rules.d/audit.rules`.
+- **Purpose**: Contains authentic kernel `SYSCALL` records linking `pulse-helper` execution to `svc-pulse` (UID 1002, PPID 1412), alongside exactly one forged orphan `EXECVE` record framing `rhea` (AUID 1001, ses=4294967295, lacking companion `SYSCALL`/`PROCTITLE` records).
+
+### EV-LOG-003 & EV-LOG-004: PAM Authentication and Session History
+- **Origin**: Host `/var/log/auth.log` and `/var/log/wtmp`.
+- **Purpose**: Proves user `rhea` had zero active PAM logins or terminal allocations (`pts/0`) during the incident window.
+
+### EV-SYS-001, EV-SYS-002, EV-SYS-003, EV-CFG-001, EV-CFG-002: System Configuration & DAC
+- **Origin**: Target host snapshots.
+- **Purpose**: Documents user accounts, group memberships, and setuid file mode `4750` on `/usr/local/bin/pulse-helper`.
+
+### EV-DAT-001 & EV-DAT-002: Encrypted Vault & Diagnostic Ticket
+- **Origin**: Filesystem artifacts seized from `/var/archive/meridian` and `/var/tmp`.
+- **Purpose**: Contains the encrypted vault and cryptographic key derivation materials required for decryption.
 
 ---
 

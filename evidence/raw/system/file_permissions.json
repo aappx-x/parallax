@@ -1,0 +1,57 @@
+{
+  "evidence_id": "EV-SYS-003",
+  "scenario": "Meridian Research Incident",
+  "collected_utc": "2026-09-14T06:00:00Z",
+  "paths": {
+    "/usr/local/bin/pulse-helper": {
+      "owner": "root",
+      "group": "svc-pulse",
+      "mode_octal": "4750",
+      "mode_symbolic": "-rwsr-x---",
+      "setuid": true,
+      "acls": "user:analyst:r-x",
+      "description": "Proprietary maintenance helper binary with setuid root"
+    },
+    "/var/archive/meridian": {
+      "owner": "root",
+      "group": "root",
+      "mode_octal": "0700",
+      "mode_symbolic": "drwx------",
+      "setuid": false,
+      "acls": "",
+      "description": "Protected backup archive directory"
+    },
+    "/var/archive/meridian/research_vault.tar.gz.enc": {
+      "owner": "root",
+      "group": "root",
+      "mode_octal": "0600",
+      "mode_symbolic": "-rw-------",
+      "setuid": false,
+      "description": "Encrypted research telemetry vault archive"
+    },
+    "/etc/pulse/pulse.conf": {
+      "owner": "root",
+      "group": "svc-pulse",
+      "mode_octal": "0640",
+      "mode_symbolic": "-rw-r-----",
+      "setuid": false,
+      "description": "PULSE/1 daemon configuration file"
+    },
+    "/var/log/audit/audit.log": {
+      "owner": "root",
+      "group": "root",
+      "mode_octal": "0600",
+      "mode_symbolic": "-rw-------",
+      "acls": "user:analyst:r--",
+      "description": "Kernel audit subsystem log"
+    },
+    "/var/log/pulse/pulse.log": {
+      "owner": "svc-pulse",
+      "group": "svc-pulse",
+      "mode_octal": "0640",
+      "mode_symbolic": "-rw-r-----",
+      "acls": "user:analyst:r--",
+      "description": "PULSE/1 daemon application log"
+    }
+  }
+}

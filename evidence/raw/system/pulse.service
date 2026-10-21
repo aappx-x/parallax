@@ -1,0 +1,16 @@
+[Unit]
+Description=PULSE/1 Telemetry and Diagnostics Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=svc-pulse
+Group=svc-pulse
+ExecStart=/usr/local/bin/pulse-daemon --config /etc/pulse/pulse.conf
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/pulse/pulse.log
+StandardError=append:/var/log/pulse/pulse.log
+
+[Install]
+WantedBy=multi-user.target

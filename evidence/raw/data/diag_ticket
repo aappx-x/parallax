@@ -1,0 +1,13 @@
+{
+  "evidence_id": "EV-DAT-002",
+  "scenario": "Meridian Research Incident",
+  "ticket_id": "DIAG-TKT-7741-ALPHA",
+  "created_utc": "2026-09-14T03:21:40Z",
+  "vault_target": "/var/archive/meridian/research_vault.tar.gz.enc",
+  "key_derivation": {
+    "fragment_a": "meridian-vault-2024-fragA",
+    "fragment_b": "fragB-sig9902",
+    "combined_passphrase": "meridian-vault-2024-fragA:fragB-sig9902"
+  },
+  "algorithm": "AES-256-CBC-PBKDF2"
+}
