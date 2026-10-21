@@ -1,0 +1,20 @@
+# Linux Audit Log Seized from meridian-lab (10.0.4.15)
+# Audit Rules Active: -a always,exit -F arch=b64 -S execve -F path=/usr/local/bin/pulse-helper -k pulse_helper_exec
+
+# Event 890: Baseline cron activity
+type=SYSCALL msg=audit(1726305600.010:890): arch=c00000b7 syscall=221 success=yes exit=0 a0=aaaae0100000 a1=aaaae0100500 a2=0 a3=0 items=2 ppid=401 pid=1301 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 tty=(none) ses=4294967295 comm="cron" exe="/usr/sbin/cron" key=(null)
+type=EXECVE msg=audit(1726305600.010:890): argc=1 a0="/usr/sbin/cron"
+type=PROCTITLE msg=audit(1726305600.010:890): proctitle=2F7573722F7362696E2F63726F6E
+
+# Event 892: Genuine kernel syscall audit record capturing pulse-helper invocation
+type=SYSCALL msg=audit(1726305672.390:892): arch=c00000b7 syscall=221 success=yes exit=0 a0=aaaad1024000 a1=aaaad1024800 a2=aaaad1025000 a3=0 items=2 ppid=1412 pid=1418 auid=4294967295 uid=1002 gid=1002 euid=0 suid=0 fsuid=0 egid=1002 sgid=1002 fsgid=1002 tty=(none) ses=4294967295 comm="pulse-helper" exe="/usr/local/bin/pulse-helper" key="pulse_helper_exec"
+type=EXECVE msg=audit(1726305672.390:892): argc=3 a0="/usr/local/bin/pulse-helper" a1="--archive-check" a2="/var/archive/meridian/research_vault.tar.gz.enc; cat /var/tmp/.diag_ticket > /tmp/.vault_key; tar -xzf /var/archive/meridian/research_vault.tar.gz.enc -C /tmp"
+type=PROCTITLE msg=audit(1726305672.390:892): proctitle=2F7573722F6C6F63616C2F62696E2F70756C73652D68656C706572002D2D617263686976652D636865636B002F7661722F617263686976652F6D6572696469616E2F72657365617263685F7661756C742E7461722E677A2E656E63
+
+# Event 893: Shell child dispatched by helper via system()
+type=SYSCALL msg=audit(1726305672.398:893): arch=c00000b7 syscall=221 success=yes exit=0 a0=aaaad1030000 a1=aaaad1030800 a2=aaaad1031000 a3=0 items=2 ppid=1418 pid=1419 auid=4294967295 uid=0 gid=1002 euid=0 suid=0 fsuid=0 egid=1002 sgid=1002 fsgid=1002 tty=(none) ses=4294967295 comm="sh" exe="/bin/dash" key="pulse_helper_exec"
+type=EXECVE msg=audit(1726305672.398:893): argc=3 a0="/bin/sh" a1="-c" a2="/bin/tar -tzf /var/archive/meridian/research_vault.tar.gz.enc; cat /var/tmp/.diag_ticket > /tmp/.vault_key; tar -xzf /var/archive/meridian/research_vault.tar.gz.enc -C /tmp >/dev/null 2>&1"
+type=PROCTITLE msg=audit(1726305672.398:893): proctitle=2F62696E2F7368002D6300
+
+# Forensic Anomaly: Fabricated orphan record injected out-of-band to frame rhea
+type=EXECVE msg=audit(1726305672.410:894): argc=3 a0="tar" a1="-czf" a2="/var/archive/meridian/research_vault.tar.gz" auid=1001 ses=4294967295

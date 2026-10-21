@@ -1,0 +1,12 @@
+[2026-09-14T03:21:02.108422Z] [INFO] [pulse.server] Accepted TCP connection from 198.51.100.24:49822 (session_id=SES-7741-ALPHA)
+[2026-09-14T03:21:02.115201Z] [INFO] [pulse.server] [SES-7741-ALPHA] Received HELLO (protocol_version=1, client=pulse-cli/0.1.0)
+[2026-09-14T03:21:02.118940Z] [INFO] [pulse.server] [SES-7741-ALPHA] Emitted STATUS (service=PULSE/1, version=0.1.0, vulnerable_mode=true)
+[2026-09-14T03:21:15.221045Z] [WARN] [pulse.server] [SES-7741-ALPHA] Authentication failed for username='svc-pulse' from 198.51.100.24 (invalid credentials)
+[2026-09-14T03:21:15.224810Z] [WARN] [pulse.server] [SES-7741-ALPHA] Emitted ERROR 401: Authentication Failed
+[2026-09-14T03:21:28.401890Z] [WARN] [pulse.server] [SES-7741-ALPHA] Received READ_DIAG request for section='system_config' from unauthenticated session
+[2026-09-14T03:21:28.406120Z] [INFO] [pulse.server] [SES-7741-ALPHA] Dispatched system_config diagnostic payload (helper=/usr/local/bin/pulse-helper, ticket=DIAG-TKT-7741-ALPHA)
+[2026-09-14T03:21:40.010500Z] [INFO] [pulse.server] [SES-7741-ALPHA] Diagnostic ticket written to /var/tmp/.diag_ticket
+[2026-09-14T03:21:45.390000Z] [INFO] [pulse.server] [SES-7741-ALPHA] Invoked maintenance helper: /usr/local/bin/pulse-helper --archive-check /var/archive/meridian/research_vault.tar.gz.enc; ... (child pid=1418)
+[2026-09-14T03:22:05.894102Z] [INFO] [pulse.server] [SES-7741-ALPHA] Received CLOSE frame: reason='client_finished'
+[2026-09-14T03:22:05.897300Z] [INFO] [pulse.server] [SES-7741-ALPHA] Emitted CLOSE acknowledgment
+[2026-09-14T03:22:05.901240Z] [INFO] [pulse.server] [SES-7741-ALPHA] Connection closed gracefully by client

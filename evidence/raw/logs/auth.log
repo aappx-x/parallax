@@ -1,0 +1,11 @@
+Sep 14 00:00:01 meridian-lab CRON[412]: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0)
+Sep 14 00:00:01 meridian-lab CRON[412]: pam_unix(cron:session): session closed for user root
+Sep 14 01:15:22 meridian-lab sshd[840]: Accepted publickey for analyst from 10.0.4.1 port 52310 ssh2: ED25519 SHA256:6Fk818vYtP0...
+Sep 14 01:15:22 meridian-lab sshd[840]: pam_unix(sshd:session): session opened for user analyst(uid=1000) by (uid=0)
+Sep 14 01:15:22 meridian-lab systemd-logind[402]: New session 3 of user analyst.
+Sep 14 02:00:01 meridian-lab CRON[980]: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0)
+Sep 14 02:00:01 meridian-lab CRON[980]: pam_unix(cron:session): session closed for user root
+Sep 14 03:00:01 meridian-lab CRON[1301]: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0)
+Sep 14 03:00:01 meridian-lab CRON[1301]: pam_unix(cron:session): session closed for user root
+Sep 14 04:00:01 meridian-lab CRON[1520]: pam_unix(cron:session): session opened for user root(uid=0) by (uid=0)
+Sep 14 04:00:01 meridian-lab CRON[1520]: pam_unix(cron:session): session closed for user root

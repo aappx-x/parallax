@@ -136,6 +136,13 @@ temp/
 *.tmp
 *.bak
 
+# Preserve synthetic forensic evidence artifacts
+!evidence/**
+!evidence/raw/logs/*.log
+
+# Local investigator progress state (transient/local gameplay)
+evidence/derived/.progress.json
+
 # ------------------------------------------------------------------------------
 # C Binaries & Build Artifacts
 # ------------------------------------------------------------------------------

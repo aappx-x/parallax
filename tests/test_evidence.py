@@ -283,3 +283,62 @@ class TestEvidenceWorkspaceAndManifest:
             assert user_note.read_text(encoding="utf-8") == "Investigator hypothesis notes"
             assert derived_file.is_file()
             assert derived_file.read_text(encoding="utf-8") == "timestamp,event"
+
+    def test_log_evidence_artifacts_present_and_hashed(self):
+        """Regression test ensuring raw/logs/{audit,auth,pulse}.log are always created and indexed."""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            ev_root = Path(tmp_dir)
+            build_evidence_workspace(ev_root, write_manifest=True)
+
+            log_files = [
+                ev_root / "raw" / "logs" / "audit.log",
+                ev_root / "raw" / "logs" / "auth.log",
+                ev_root / "raw" / "logs" / "pulse.log",
+                ev_root / "raw" / "logs" / "wtmp.json",
+            ]
+            for lf in log_files:
+                assert lf.is_file(), f"Expected log file {lf.name} was not created"
+                assert lf.stat().st_size > 0, f"Expected non-empty {lf.name}"
+
+            # Verify presence in manifest.json
+            manifest_json_path = ev_root / "manifests" / "manifest.json"
+            with manifest_json_path.open("r", encoding="utf-8") as f:
+                manifest_data = json.load(f)
+
+            manifest_paths = {a["path"] for a in manifest_data["artifacts"]}
+            assert "raw/logs/audit.log" in manifest_paths
+            assert "raw/logs/auth.log" in manifest_paths
+            assert "raw/logs/pulse.log" in manifest_paths
+            assert "raw/logs/wtmp.json" in manifest_paths
+
+            # Verify missing log file detection
+            for target_log in ("audit.log", "auth.log", "pulse.log"):
+                with tempfile.TemporaryDirectory() as sub_dir:
+                    sub_root = Path(sub_dir)
+                    build_evidence_workspace(sub_root, write_manifest=True)
+                    (sub_root / "raw" / "logs" / target_log).unlink()
+                    valid, errs = verify_manifest(manifest_data, base_dir=sub_root)
+                    assert valid is False
+                    assert any(f"raw/logs/{target_log}" in e for e in errs)
+
+    def test_no_evidence_artifacts_ignored_by_git(self):
+        """Regression test verifying .gitignore does not ignore any required forensic evidence artifacts."""
+        import subprocess
+
+        repo_root = Path(__file__).resolve().parent.parent
+        for rel_path in ARTIFACT_METADATA.keys():
+            full_path = repo_root / "evidence" / rel_path
+            # Check git check-ignore status
+            proc = subprocess.run(
+                ["git", "check-ignore", "-v", str(full_path)],
+                cwd=str(repo_root),
+                capture_output=True,
+                text=True,
+            )
+            # proc.returncode == 0 means matched by an ignore pattern;
+            # but if it matches a negative pattern (!evidence/...), git check-ignore returns 0 with leading '!'
+            if proc.returncode == 0:
+                output = proc.stdout.strip()
+                # Verify that it is an un-ignore (starts with '!') rather than an active ignore
+                rule = output.split()[0] if output else ""
+                assert "!" in rule, f"Artifact {rel_path} is ignored by git rule: {output}"
