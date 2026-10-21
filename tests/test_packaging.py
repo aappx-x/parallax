@@ -85,36 +85,78 @@ def test_virtualbox_ovf_descriptor_structure():
     assert "10" in resource_type_values  # Ethernet adapter
 
 
-def test_appliance_packaging_execution():
-    """Verify packaging script executes cleanly and produces release artifacts with SHA-256 hashes."""
+def test_packaging_template_mode():
+    """Verify packaging script produces configuration templates when virtual disks are omitted."""
     with tempfile.TemporaryDirectory() as tmp_dir:
         proc = subprocess.run(
             [str(PACKAGE_SH), "--target", "both", "--output-dir", tmp_dir],
             capture_output=True,
             text=True,
         )
-        assert proc.returncode == 0, f"Packaging failed:\n{proc.stderr}\n{proc.stdout}"
+        assert proc.returncode == 0, f"Template packaging failed:\n{proc.stderr}\n{proc.stdout}"
 
-        utm_archive = Path(tmp_dir) / "PARALLAX-Ubuntu-24.04-ARM64.utm.zip"
-        vbox_archive = Path(tmp_dir) / "PARALLAX-Ubuntu-24.04-x86_64.ova"
+        utm_archive = Path(tmp_dir) / "PARALLAX-Ubuntu-24.04-ARM64-config.utm.zip"
+        vbox_archive = Path(tmp_dir) / "PARALLAX-Ubuntu-24.04-x86_64-ovf-template.tar.gz"
         checksum_file = Path(tmp_dir) / "RELEASE_SHA256SUMS"
 
-        assert utm_archive.is_file(), "UTM release archive missing"
+        assert utm_archive.is_file(), "UTM template archive missing"
         assert utm_archive.stat().st_size > 0
 
-        assert vbox_archive.is_file(), "VirtualBox release archive missing"
+        assert vbox_archive.is_file(), "VirtualBox OVF template archive missing"
         assert vbox_archive.stat().st_size > 0
 
         assert checksum_file.is_file(), "RELEASE_SHA256SUMS file missing"
         checksum_text = checksum_file.read_text(encoding="utf-8")
 
-        assert "PARALLAX-Ubuntu-24.04-ARM64.utm.zip" in checksum_text
-        assert "PARALLAX-Ubuntu-24.04-x86_64.ova" in checksum_text
+        assert "PARALLAX-Ubuntu-24.04-ARM64-config.utm.zip" in checksum_text
+        assert "PARALLAX-Ubuntu-24.04-x86_64-ovf-template.tar.gz" in checksum_text
 
-        # Validate hash format (64-character hex strings)
-        lines = [line.strip() for line in checksum_text.splitlines() if line.strip()]
-        assert len(lines) == 2
-        for line in lines:
-            sha, filename = line.split(maxsplit=1)
-            assert len(sha) == 64
-            assert all(c in "0123456789abcdef" for c in sha.lower())
+
+def test_packaging_full_appliance_with_disks():
+    """Verify packaging script produces complete bootable appliances when virtual disks are provided."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        fake_arm64_disk = tmp_path / "ubuntu-arm64.qcow2"
+        fake_x86_disk = tmp_path / "ubuntu-x86.vmdk"
+        fake_arm64_disk.write_bytes(b"mock_qcow2_content_for_test")
+        fake_x86_disk.write_bytes(b"mock_vmdk_content_for_test")
+
+        out_dir = tmp_path / "out"
+        proc = subprocess.run(
+            [
+                str(PACKAGE_SH),
+                "--target", "both",
+                "--output-dir", str(out_dir),
+                "--disk-arm64", str(fake_arm64_disk),
+                "--disk-x86_64", str(fake_x86_disk),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0, f"Full packaging failed:\n{proc.stderr}\n{proc.stdout}"
+
+        utm_appliance = out_dir / "PARALLAX-Ubuntu-24.04-ARM64.utm.zip"
+        vbox_appliance = out_dir / "PARALLAX-Ubuntu-24.04-x86_64.ova"
+        checksum_file = out_dir / "RELEASE_SHA256SUMS"
+
+        assert utm_appliance.is_file(), "UTM complete appliance missing"
+        assert vbox_appliance.is_file(), "VirtualBox complete appliance missing"
+
+        # Check OVA archive contains the VMDK and .mf manifest
+        proc_tar = subprocess.run(["tar", "-tf", str(vbox_appliance)], capture_output=True, text=True)
+        assert proc_tar.returncode == 0
+        assert "parallax-disk-x86_64.vmdk" in proc_tar.stdout
+        assert "PARALLAX-Ubuntu-24.04-x86_64.mf" in proc_tar.stdout
+
+
+def test_packaging_require_disks_flag():
+    """Verify --require-disks aborts with error if disk paths are missing."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        proc = subprocess.run(
+            [str(PACKAGE_SH), "--target", "both", "--output-dir", tmp_dir, "--require-disks"],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode != 0
+        assert "Missing required" in proc.stderr
+

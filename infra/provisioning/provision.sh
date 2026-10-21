@@ -266,6 +266,14 @@ configure_accounts() {
             fi
             log_success "Created user '${uname}' (UID ${uid})"
         fi
+
+        # Ensure analyst login password and shell are configured
+        if [[ "${uname}" == "${ANALYST_USER}" ]]; then
+            echo "${ANALYST_USER}:${ANALYST_USER}" | chpasswd 2>/dev/null || true
+            usermod -U "${ANALYST_USER}" 2>/dev/null || true
+            usermod -s /bin/bash "${ANALYST_USER}" 2>/dev/null || true
+            log_success "Configured login credentials for '${ANALYST_USER}' (password: ${ANALYST_USER})"
+        fi
     done
 
     # Add analyst to systemd-journal group for offline log examination

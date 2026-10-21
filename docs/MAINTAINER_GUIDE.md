@@ -122,14 +122,24 @@ sudo ./infra/provisioning/provision.sh --deactivate
 Run the packaging script from the repository root:
 
 ```bash
-# Package both UTM (Apple Silicon) and VirtualBox (Windows x86-64)
+# A. Package complete appliances with provisioned virtual disks:
+./infra/packaging/package_appliance.sh \
+    --target both \
+    --disk-arm64 /path/to/ubuntu-arm64.qcow2 \
+    --disk-x86_64 /path/to/ubuntu-x86_64.vmdk
+
+# B. Package configuration and OVF specification templates (without disks):
 ./infra/packaging/package_appliance.sh --target both
 ```
 
 Outputs in `dist/`:
-- `PARALLAX-Ubuntu-24.04-ARM64.utm.zip`: UTM appliance package for macOS Apple Silicon.
-- `PARALLAX-Ubuntu-24.04-x86_64.ova`: VirtualBox appliance for Windows x86-64.
-- `RELEASE_SHA256SUMS`: Cryptographic checksums of all release packages.
+- **Complete Appliances (when disks are supplied)**:
+  - `PARALLAX-Ubuntu-24.04-ARM64.utm.zip`: UTM appliance bundle with embedded QCOW2 disk.
+  - `PARALLAX-Ubuntu-24.04-x86_64.ova`: VirtualBox appliance with embedded VMDK disk and `.mf` manifest.
+- **Specification Templates (when disks are omitted)**:
+  - `PARALLAX-Ubuntu-24.04-ARM64-config.utm.zip`: UTM hardware profile and network topology template.
+  - `PARALLAX-Ubuntu-24.04-x86_64-ovf-template.tar.gz`: OVF 1.0 XML descriptor and hardware definition template.
+- `RELEASE_SHA256SUMS`: Cryptographic SHA-256 checksums of generated release packages.
 
 ---
 
@@ -137,9 +147,10 @@ Outputs in `dist/`:
 
 Before publishing release packages, verify:
 - [ ] Working tree is clean (`git status`).
-- [ ] All 134 automated unit and integration tests pass (`pytest -v`).
+- [ ] All 150 automated unit and integration tests pass (`pytest -v`).
 - [ ] Verification suite passes (`python3 -m parallax.verify`).
-- [ ] No `__pycache__`, `.pytest_cache`, `.DS_Store`, or `.git` files present in VM image.
+- [ ] Real virtual disks are verified with `qemu-img info` prior to full appliance packaging.
+- [ ] No `__pycache__`, `.pytest_cache`, `.DS_Store`, or `.git` files present in release image.
 - [ ] No private SSH keys or sensitive host history stored in guest.
 - [ ] Evidence manifest checksums match `evidence/manifests/SHA256SUMS`.
 - [ ] Player instructions in `docs/PLAYER_GUIDE.md` match current behavior.

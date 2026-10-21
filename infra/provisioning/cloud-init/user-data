@@ -4,7 +4,7 @@ autoinstall:
   identity:
     hostname: meridian-lab
     username: analyst
-    password: "$6$rounds=4096$meridianlab$DqK2y7s.XmU3zF4vO9gA6bC1eD8jL0kM2nP4qR6sT8uV0wX2yZ4aB6cD8eF0gH2iJ4kL6mN8oP0qR2sT4uV6w." # analyst:analyst
+    password: "$6$meridianlab$IGt2tjjzBbKWUQuQ8zdaH.ypWN6L7AAmMmbjwkF/m9UIyoSlFPkltE.82cZC/ADNCIYhUWNUq8AkhhKJQtn7O0" # analyst:analyst
     realname: "PARALLAX Investigator"
   locale: en_US.UTF-8
   keyboard:
