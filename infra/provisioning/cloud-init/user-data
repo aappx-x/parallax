@@ -1,0 +1,40 @@
+#cloud-config
+autoinstall:
+  version: 1
+  identity:
+    hostname: meridian-lab
+    username: analyst
+    password: "$6$rounds=4096$meridianlab$DqK2y7s.XmU3zF4vO9gA6bC1eD8jL0kM2nP4qR6sT8uV0wX2yZ4aB6cD8eF0gH2iJ4kL6mN8oP0qR2sT4uV6w." # analyst:analyst
+    realname: "PARALLAX Investigator"
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+  ssh:
+    install-server: true
+    allow-pw: true
+  network:
+    network:
+      version: 2
+      ethernets:
+        all-en:
+          match:
+            name: "en*|eth*"
+          dhcp4: true
+  packages:
+    - python3
+    - python3-pip
+    - python3-venv
+    - build-essential
+    - auditd
+    - iproute2
+    - curl
+    - net-tools
+    - acl
+    - git
+  late-commands:
+    # Ensure analyst is member of systemd-journal
+    - curtin in-target --target=/target -- usermod -a -G systemd-journal analyst
+    # Execute non-interactive safe preparation
+    - curtin in-target --target=/target -- bash -c "if [ -f /opt/parallax/infra/provisioning/provision.sh ]; then /opt/parallax/infra/provisioning/provision.sh --prepare; fi"
+  user-data:
+    disable_root: false

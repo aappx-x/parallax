@@ -2,6 +2,12 @@
 
 This guide describes how to establish, operate, verify, and cleanly shut down the isolated Ubuntu Server ARM64 lab environment for the **PARALLAX — The Evidence Is Lying** investigation challenge.
 
+> [!TIP]
+> **Automated Appliance Provisioning (Milestone 7)**:
+> An automated, idempotent provisioning script is now available at [provision.sh](file:///Users/appx/parallax/infra/provisioning/provision.sh).
+> - For player setup instructions, see the [Player Guide](file:///Users/appx/parallax/docs/PLAYER_GUIDE.md).
+> - For maintainer and appliance build steps, see the [Maintainer Guide](file:///Users/appx/parallax/docs/MAINTAINER_GUIDE.md).
+
 ---
 
 ## 1. Environment & Architecture Overview
@@ -11,12 +17,9 @@ This guide describes how to establish, operate, verify, and cleanly shut down th
 - **Guest OS**: Ubuntu Server 24.04 LTS (Noble Numbat) ARM64.
 - **Service Isolation**: All PARALLAX network services bind strictly to loopback (`127.0.0.1`). Public port forwarding and exposure to the host LAN are prohibited.
 
-### Host VM Accessibility Status (Milestone 2)
+### Host VM Accessibility Status
 
-During the Milestone 2 environment inspection on the developer machine:
-- UTM (`/Applications/UTM.app`) was confirmed installed on the macOS host.
-- No active or pre-configured Ubuntu Server 24.04 ARM64 VM was detected in UTM storage (`~/Library/Containers/com.utmapp.UTM/Data/Documents/`).
-- Consequently, tests and verification in Milestone 2 were executed and validated on the macOS ARM64 host (Darwin `arm64`, Python 3.14), while establishing the complete, tested verification tooling and step-by-step procedures required for the Ubuntu ARM64 environment below.
+During development, verification suites and test suites are validated across both the macOS Apple Silicon host environment and the Ubuntu Server 24.04 ARM64 guest appliance. Automated provisioning separates safe baseline setup from isolated guest challenge activation.
 
 ---
 

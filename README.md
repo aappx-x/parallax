@@ -94,18 +94,35 @@ parallax/
 
 ## 5. Development Status
 
-> [!IMPORTANT]
-> **Stage 0: Initial Design & Repository Initialization**
-> This repository is currently in an early design and planning phase. No challenge daemons, synthetic evidence files, or virtual machine images have been built or released yet. Planned functionality described across the documentation reflects the target architecture and roadmap.
+> [!NOTE]
+> **Milestone 7: Complete Investigation Appliance & Packaging**
+> The PARALLAX investigation appliance is fully implemented and packaged. The codebase provides the complete PULSE/1 protocol daemon, 16 synthetic raw evidence artifacts with cryptographic SHA-256 manifests, a deterministic 15-objective validation engine, global CLI, automated provisioning scripts, and appliance packaging configurations for both supported hypervisor targets.
 
 ---
 
-## 6. Planned Development Environment
+## 6. Supported Deployment Targets
 
-The development environment is explicitly scoped for Apple Silicon workstations hosting an ARM64 Linux guest:
+PARALLAX provides dual-target deployment support using a shared codebase and unified investigation scenario:
 
-- **Host Workstation**: macOS running on Apple Silicon (M-series / M5).
-- **Hypervisor**: [UTM](https://mac.getutm.app/) utilizing Apple's Hypervisor.framework and QEMU ARM64 backend.
-- **Guest Operating System**: Ubuntu Server ARM64 (LTS).
-- **Tooling Language**: Python 3.11+ for validation logic, harness scripts, and protocol testing.
-- **Scope Note**: Cross-platform virtualization (x86_64 emulation) is explicitly out of scope for the initial release milestone to ensure optimal performance and reproducible builds.
+1. **Target A: UTM on Apple Silicon (macOS)**
+   - **Guest OS**: Ubuntu Server 24.04 LTS ARM64 (`aarch64`).
+   - **Hypervisor**: [UTM 4.x+](https://mac.getutm.app/).
+   - **Package**: `PARALLAX-Ubuntu-24.04-ARM64.utm.zip`.
+   - **Verification**: Verified on Apple Silicon macOS hosts.
+
+2. **Target B: Oracle VirtualBox on Windows (x86-64)**
+   - **Guest OS**: Ubuntu Server 24.04 LTS x86-64 (`amd64`).
+   - **Hypervisor**: [Oracle VM VirtualBox 7.x](https://www.virtualbox.org/).
+   - **Package**: `PARALLAX-Ubuntu-24.04-x86_64.ova`.
+   - **Verification**: OVF 1.0 descriptor and automated packaging pipeline validated.
+
+---
+
+## 7. Documentation & Quickstart
+
+- [Player Investigation Guide](file:///Users/appx/parallax/docs/PLAYER_GUIDE.md): Step-by-step instructions for importing the VM, logging in as `analyst`, using the `parallax` CLI, and submitting findings.
+- [Maintainer & Build Guide](file:///Users/appx/parallax/docs/MAINTAINER_GUIDE.md): Automated provisioning, offline verification, safe privileged boundary testing, and appliance packaging.
+- [Scenario Design & Backstory](file:///Users/appx/parallax/docs/SCENARIO_DESIGN.md): Detailed narrative, incident timeline, and truth-vs-deception specifications.
+- [Objectives Ground Truth Mapping](file:///Users/appx/parallax/docs/OBJECTIVES_MAPPING.md): Technical mapping and validation criteria for objectives P01 through P15.
+- [Evidence Conventions](file:///Users/appx/parallax/docs/EVIDENCE_CONVENTIONS.md): Evidence naming, directory layout, and chain-of-custody standards.
+
