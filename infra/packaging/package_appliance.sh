@@ -214,7 +214,15 @@ To assemble a complete bootable appliance:
 README_UTM_TPL
     fi
 
-    (cd "${OUTPUT_DIR}" && zip -q -r "$(basename "${utm_zip}")" "${bundle_name}")
+    if which zip >/dev/null 2>&1; then
+        (cd "${OUTPUT_DIR}" && zip -q -r "$(basename "${utm_zip}")" "${bundle_name}")
+    elif which python3 >/dev/null 2>&1; then
+        log_info "Tool 'zip' not found; using 'python3 -m zipfile' to package $(basename "${utm_zip}")."
+        (cd "${OUTPUT_DIR}" && python3 -m zipfile -c "$(basename "${utm_zip}")" "${bundle_name}")
+    else
+        log_error "Missing packaging dependency: 'zip' or 'python3' is required to create $(basename "${utm_zip}")."
+        exit 1
+    fi
     log_success "Created UTM release artifact: ${utm_zip}"
 }
 

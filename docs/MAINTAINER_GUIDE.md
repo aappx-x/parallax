@@ -61,7 +61,7 @@ sudo ./infra/provisioning/provision.sh --prepare
 
 The script will:
 1. Verify operating system and architecture (`aarch64` or `x86_64`).
-2. Install required packages (`python3`, `auditd`, `build-essential`, `iproute2`, `net-tools`, `acl`).
+2. Install required packages (`python3`, `auditd`, `build-essential`, `iproute2`, `net-tools`, `acl`, `zip`).
 3. Idempotently configure lab accounts with collision resolution:
    - Detects and preserves existing administrative accounts (e.g. `parallaxadmin` with UID/GID 1000) intact without mutation.
    - Assigns unique, non-conflicting IDs for `analyst`, `rhea`, and `svc-pulse` (defaulting to 1000, 1001, 1002 on clean systems, or 1001, 1002, 1003 when UID 1000 is occupied).

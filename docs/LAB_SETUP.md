@@ -74,7 +74,9 @@ sudo apt update && sudo apt install -y \
     build-essential \
     iproute2 \
     net-tools \
-    curl
+    curl \
+    acl \
+    zip
 ```
 
 ### B. Verify System and Python Versions

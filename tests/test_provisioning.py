@@ -59,6 +59,55 @@ def test_provision_script_dry_run():
     assert "Dry-run validation complete" in proc.stdout
 
 
+def test_provision_script_dry_run_with_getent_pipefail():
+    """Verify dry-run completes cleanly when getent is present on host and admin holds UID/GID 1000."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        fake_bin = Path(tmp_dir) / "bin"
+        fake_bin.mkdir()
+        getent = fake_bin / "getent"
+        getent.write_text(
+            "#!/bin/bash\n"
+            "if [ \"$1\" = \"passwd\" ] && [ \"$2\" = \"parallaxadmin\" ]; then\n"
+            "    echo \"parallaxadmin:x:1000:1000:Admin:/home/parallaxadmin:/bin/bash\"\n"
+            "    exit 0\n"
+            "elif [ \"$1\" = \"passwd\" ] && [ \"$2\" = \"1000\" ]; then\n"
+            "    echo \"parallaxadmin:x:1000:1000:Admin:/home/parallaxadmin:/bin/bash\"\n"
+            "    exit 0\n"
+            "elif [ \"$1\" = \"group\" ] && [ \"$2\" = \"parallaxadmin\" ]; then\n"
+            "    echo \"parallaxadmin:x:1000:\"\n"
+            "    exit 0\n"
+            "elif [ \"$1\" = \"group\" ] && [ \"$2\" = \"1000\" ]; then\n"
+            "    echo \"parallaxadmin:x:1000:\"\n"
+            "    exit 0\n"
+            "fi\n"
+            "exit 2\n"
+        )
+        getent.chmod(0o755)
+
+        id_sh = fake_bin / "id"
+        id_sh.write_text(
+            "#!/bin/bash\n"
+            "if [ \"$1\" = \"-u\" ] && [ \"$2\" = \"parallaxadmin\" ]; then\n"
+            "    echo 1000\n"
+            "    exit 0\n"
+            "elif [ \"$1\" = \"-g\" ] && [ \"$2\" = \"parallaxadmin\" ]; then\n"
+            "    echo 1000\n"
+            "    exit 0\n"
+            "fi\n"
+            "exit 1\n"
+        )
+        id_sh.chmod(0o755)
+
+        env = os.environ.copy()
+        env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+
+        proc = subprocess.run([str(PROVISION_SH), "--dry-run"], capture_output=True, text=True, env=env)
+        assert proc.returncode == 0, f"Dry-run with getent failed:\n{proc.stderr}\n{proc.stdout}"
+        assert "Administrator 'parallaxadmin': PRESERVED (UID=1000, GID=1000, untouched)" in proc.stdout
+        assert "Dry-run validation complete" in proc.stdout
+
+
+
 def test_provision_script_boundary_constants_alignment():
     """Verify user/group identities and paths in provision.sh match boundary.py."""
     content = PROVISION_SH.read_text(encoding="utf-8")

@@ -30,6 +30,7 @@ autoinstall:
     - curl
     - net-tools
     - acl
+    - zip
     - git
   late-commands:
     # Ensure analyst is member of systemd-journal

@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -159,4 +160,40 @@ def test_packaging_require_disks_flag():
         )
         assert proc.returncode != 0
         assert "Missing required" in proc.stderr
+
+
+def test_packaging_zip_python_fallback():
+    """Verify package_appliance.sh falls back to python3 -m zipfile when zip binary is unavailable."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        fake_bin = tmp_path / "bin"
+        fake_bin.mkdir()
+
+        real_which = shutil.which("which") or "/usr/bin/which"
+        mock_which = fake_bin / "which"
+        mock_which.write_text(
+            f"#!/bin/bash\n"
+            f"if [ \"$1\" = \"zip\" ]; then\n"
+            f"    exit 1\n"
+            f"fi\n"
+            f"exec {real_which} \"$@\"\n"
+        )
+        mock_which.chmod(0o755)
+
+        env = os.environ.copy()
+        env["PATH"] = f"{fake_bin}:{env.get('PATH', '')}"
+
+        out_dir = tmp_path / "out"
+        proc = subprocess.run(
+            [str(PACKAGE_SH), "--target", "utm", "--output-dir", str(out_dir)],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        assert proc.returncode == 0, f"Fallback packaging failed:\n{proc.stderr}\n{proc.stdout}"
+
+        utm_archive = out_dir / "PARALLAX-Ubuntu-24.04-ARM64-config.utm.zip"
+        assert utm_archive.is_file(), "UTM archive was not created via python3 zipfile fallback"
+        assert utm_archive.stat().st_size > 0
+        assert "using 'python3 -m zipfile'" in proc.stdout
 

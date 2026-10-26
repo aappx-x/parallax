@@ -193,6 +193,7 @@ install_packages() {
         curl
         net-tools
         acl
+        zip
     )
 
     if [[ "${MODE}" == "dry-run" ]]; then
@@ -224,11 +225,16 @@ install_packages() {
 uid_in_use() {
     local check_uid="$1"
     if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
-        grep -q -E "^[^:]*:[^:]*:${check_uid}:" "${PARALLAX_MOCK_PASSWD}"
-        return $?
+        if grep -q -E "^[^:]*:[^:]*:${check_uid}:" "${PARALLAX_MOCK_PASSWD}"; then
+            return 0
+        fi
+        return 1
     fi
     if which getent >/dev/null 2>&1; then
-        getent passwd "${check_uid}" >/dev/null 2>&1
+        if getent passwd "${check_uid}" >/dev/null 2>&1; then
+            return 0
+        fi
+        return 1
     elif id "${check_uid}" >/dev/null 2>&1; then
         return 0
     else
@@ -240,13 +246,21 @@ uid_in_use() {
 gid_in_use() {
     local check_gid="$1"
     if [[ -n "${PARALLAX_MOCK_GROUP:-}" && -f "${PARALLAX_MOCK_GROUP}" ]]; then
-        grep -q -E "^[^:]*:[^:]*:${check_gid}:" "${PARALLAX_MOCK_GROUP}"
-        return $?
+        if grep -q -E "^[^:]*:[^:]*:${check_gid}:" "${PARALLAX_MOCK_GROUP}"; then
+            return 0
+        fi
+        return 1
     fi
     if which getent >/dev/null 2>&1; then
-        getent group "${check_gid}" >/dev/null 2>&1
+        if getent group "${check_gid}" >/dev/null 2>&1; then
+            return 0
+        fi
+        return 1
     else
-        grep -q -E "^[^:]*:[^:]*:${check_gid}:" /etc/group 2>/dev/null
+        if grep -q -E "^[^:]*:[^:]*:${check_gid}:" /etc/group 2>/dev/null; then
+            return 0
+        fi
+        return 1
     fi
 }
 
@@ -254,51 +268,84 @@ gid_in_use() {
 get_user_for_uid() {
     local check_uid="$1"
     if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
-        grep -E "^[^:]*:[^:]*:${check_uid}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 | cut -d: -f1
+        local line
+        line="$(grep -E "^[^:]*:[^:]*:${check_uid}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 || true)"
+        if [[ -n "${line}" ]]; then
+            echo "${line}" | cut -d: -f1
+        fi
         return 0
     fi
     if which getent >/dev/null 2>&1; then
-        getent passwd "${check_uid}" 2>/dev/null | cut -d: -f1
+        local line
+        if line="$(getent passwd "${check_uid}" 2>/dev/null)"; then
+            echo "${line}" | cut -d: -f1
+        fi
     elif id -nu "${check_uid}" >/dev/null 2>&1; then
-        id -nu "${check_uid}" 2>/dev/null
+        id -nu "${check_uid}" 2>/dev/null || true
     fi
+    return 0
 }
 
 # Retrieve group name owning GID
 get_group_for_gid() {
     local check_gid="$1"
     if [[ -n "${PARALLAX_MOCK_GROUP:-}" && -f "${PARALLAX_MOCK_GROUP}" ]]; then
-        grep -E "^[^:]*:[^:]*:${check_gid}:" "${PARALLAX_MOCK_GROUP}" 2>/dev/null | head -n1 | cut -d: -f1
+        local line
+        line="$(grep -E "^[^:]*:[^:]*:${check_gid}:" "${PARALLAX_MOCK_GROUP}" 2>/dev/null | head -n1 || true)"
+        if [[ -n "${line}" ]]; then
+            echo "${line}" | cut -d: -f1
+        fi
         return 0
     fi
     if which getent >/dev/null 2>&1; then
-        getent group "${check_gid}" 2>/dev/null | cut -d: -f1
+        local line
+        if line="$(getent group "${check_gid}" 2>/dev/null)"; then
+            echo "${line}" | cut -d: -f1
+        fi
     else
-        grep -E "^[^:]*:[^:]*:${check_gid}:" /etc/group 2>/dev/null | head -n1 | cut -d: -f1
+        local line
+        line="$(grep -E "^[^:]*:[^:]*:${check_gid}:" /etc/group 2>/dev/null | head -n1 || true)"
+        if [[ -n "${line}" ]]; then
+            echo "${line}" | cut -d: -f1
+        fi
     fi
+    return 0
 }
 
 # Check if user exists by username
 user_exists() {
     local uname="$1"
     if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
-        grep -q -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}"
-        return $?
+        if grep -q -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}"; then
+            return 0
+        fi
+        return 1
     fi
-    id -u "${uname}" >/dev/null 2>&1
+    if id -u "${uname}" >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
 }
 
 # Check if group exists by groupname
 group_exists() {
     local gname="$1"
     if [[ -n "${PARALLAX_MOCK_GROUP:-}" && -f "${PARALLAX_MOCK_GROUP}" ]]; then
-        grep -q -E "^${gname}:" "${PARALLAX_MOCK_GROUP}"
-        return $?
+        if grep -q -E "^${gname}:" "${PARALLAX_MOCK_GROUP}"; then
+            return 0
+        fi
+        return 1
     fi
     if which getent >/dev/null 2>&1; then
-        getent group "${gname}" >/dev/null 2>&1
+        if getent group "${gname}" >/dev/null 2>&1; then
+            return 0
+        fi
+        return 1
     else
-        grep -q -E "^${gname}:" /etc/group 2>/dev/null
+        if grep -q -E "^${gname}:" /etc/group 2>/dev/null; then
+            return 0
+        fi
+        return 1
     fi
 }
 
@@ -306,34 +353,54 @@ group_exists() {
 get_uid_for_user() {
     local uname="$1"
     if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
-        grep -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 | cut -d: -f3
+        local line
+        line="$(grep -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 || true)"
+        if [[ -n "${line}" ]]; then
+            echo "${line}" | cut -d: -f3
+        fi
         return 0
     fi
-    id -u "${uname}" 2>/dev/null
+    id -u "${uname}" 2>/dev/null || true
 }
 
 # Retrieve primary GID for a given user
 get_gid_for_user() {
     local uname="$1"
     if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
-        grep -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 | cut -d: -f4
+        local line
+        line="$(grep -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 || true)"
+        if [[ -n "${line}" ]]; then
+            echo "${line}" | cut -d: -f4
+        fi
         return 0
     fi
-    id -g "${uname}" 2>/dev/null
+    id -g "${uname}" 2>/dev/null || true
 }
 
 # Retrieve GID for a given group
 get_gid_for_group() {
     local gname="$1"
     if [[ -n "${PARALLAX_MOCK_GROUP:-}" && -f "${PARALLAX_MOCK_GROUP}" ]]; then
-        grep -E "^${gname}:" "${PARALLAX_MOCK_GROUP}" 2>/dev/null | head -n1 | cut -d: -f3
+        local line
+        line="$(grep -E "^${gname}:" "${PARALLAX_MOCK_GROUP}" 2>/dev/null | head -n1 || true)"
+        if [[ -n "${line}" ]]; then
+            echo "${line}" | cut -d: -f3
+        fi
         return 0
     fi
     if which getent >/dev/null 2>&1; then
-        getent group "${gname}" 2>/dev/null | cut -d: -f3
+        local line
+        if line="$(getent group "${gname}" 2>/dev/null)"; then
+            echo "${line}" | cut -d: -f3
+        fi
     else
-        grep -E "^${gname}:" /etc/group 2>/dev/null | head -n1 | cut -d: -f3
+        local line
+        line="$(grep -E "^${gname}:" /etc/group 2>/dev/null | head -n1 || true)"
+        if [[ -n "${line}" ]]; then
+            echo "${line}" | cut -d: -f3
+        fi
     fi
+    return 0
 }
 
 # Helper to check list membership
