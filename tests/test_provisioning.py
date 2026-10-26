@@ -20,6 +20,7 @@ from parallax.system.boundary import (
     SVC_PULSE_GID,
     SVC_PULSE_UID,
     SVC_PULSE_USER,
+    check_host_identities,
 )
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -135,3 +136,251 @@ def test_investigator_notes_and_progress_preservation():
 
         assert progress_file.is_file()
         assert '"P01"' in progress_file.read_text(encoding="utf-8")
+
+
+def test_provisioning_uid_gid_collision_resolution():
+    """Verify provision.sh resolves non-conflicting IDs when parallaxadmin holds UID/GID 1000."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        passwd_file = tmp_path / "passwd"
+        group_file = tmp_path / "group"
+
+        passwd_file.write_text(
+            "root:x:0:0:root:/root:/bin/bash\n"
+            "parallaxadmin:x:1000:1000:Parallax Administrator:/home/parallaxadmin:/bin/bash\n",
+            encoding="utf-8",
+        )
+        group_file.write_text(
+            "root:x:0:\n"
+            "parallaxadmin:x:1000:\n",
+            encoding="utf-8",
+        )
+
+        env = os.environ.copy()
+        env["PARALLAX_MOCK_PASSWD"] = str(passwd_file)
+        env["PARALLAX_MOCK_GROUP"] = str(group_file)
+
+        proc = subprocess.run(
+            [str(PROVISION_SH), "--dry-run"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        assert proc.returncode == 0, f"Dry-run failed: {proc.stderr}\n{proc.stdout}"
+
+        # Must explicitly detect and preserve parallaxadmin
+        assert "Administrator 'parallaxadmin': PRESERVED (UID=1000, GID=1000, untouched)" in proc.stdout
+
+        # Must resolve analyst to 1001 (not 1000)
+        assert "Group 'analyst': MISSING (would create GID=1001)" in proc.stdout
+        assert "User 'analyst': MISSING (would create UID=1001, GID=1001)" in proc.stdout
+
+        # Must resolve rhea to 1002 (not 1001)
+        assert "Group 'rhea': MISSING (would create GID=1002)" in proc.stdout
+        assert "User 'rhea': MISSING (would create UID=1002, GID=1002)" in proc.stdout
+
+        # Must resolve svc-pulse to 1003 (not 1002)
+        assert "Group 'svc-pulse': MISSING (would create GID=1003)" in proc.stdout
+        assert "User 'svc-pulse': MISSING (would create UID=1003, GID=1003)" in proc.stdout
+
+
+def test_provisioning_preserves_parallaxadmin_intact():
+    """Verify administrator account parallaxadmin is preserved completely intact."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        passwd_file = tmp_path / "passwd"
+        group_file = tmp_path / "group"
+
+        initial_passwd = (
+            "root:x:0:0:root:/root:/bin/bash\n"
+            "parallaxadmin:x:1000:1000:Parallax Admin:/home/parallaxadmin:/bin/bash\n"
+        )
+        initial_group = (
+            "root:x:0:\n"
+            "parallaxadmin:x:1000:\n"
+            "sudo:x:27:parallaxadmin\n"
+        )
+
+        passwd_file.write_text(initial_passwd, encoding="utf-8")
+        group_file.write_text(initial_group, encoding="utf-8")
+
+        env = os.environ.copy()
+        env["PARALLAX_MOCK_PASSWD"] = str(passwd_file)
+        env["PARALLAX_MOCK_GROUP"] = str(group_file)
+
+        proc = subprocess.run(
+            [str(PROVISION_SH), "--dry-run"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        assert proc.returncode == 0
+        assert "Administrator 'parallaxadmin': PRESERVED" in proc.stdout
+
+        # Verify mock files were not mutated in dry-run
+        assert passwd_file.read_text(encoding="utf-8") == initial_passwd
+        assert group_file.read_text(encoding="utf-8") == initial_group
+
+
+def test_provisioning_idempotency_repeat_run():
+    """Verify rerun of provisioning on already provisioned accounts preserves IDs and makes no duplicate changes."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        passwd_file = tmp_path / "passwd"
+        group_file = tmp_path / "group"
+
+        passwd_file.write_text(
+            "root:x:0:0:root:/root:/bin/bash\n"
+            "parallaxadmin:x:1000:1000:Parallax Admin:/home/parallaxadmin:/bin/bash\n"
+            "analyst:x:1001:1001:PARALLAX Investigator:/home/analyst:/bin/bash\n"
+            "rhea:x:1002:1002:Rhea Sanders:/home/rhea:/bin/bash\n"
+            "svc-pulse:x:1003:1003:PULSE Service Account:/var/log/pulse:/usr/sbin/nologin\n",
+            encoding="utf-8",
+        )
+        group_file.write_text(
+            "root:x:0:\n"
+            "parallaxadmin:x:1000:\n"
+            "analyst:x:1001:\n"
+            "rhea:x:1002:\n"
+            "svc-pulse:x:1003:\n"
+            "systemd-journal:x:101:analyst\n",
+            encoding="utf-8",
+        )
+
+        env = os.environ.copy()
+        env["PARALLAX_MOCK_PASSWD"] = str(passwd_file)
+        env["PARALLAX_MOCK_GROUP"] = str(group_file)
+
+        proc = subprocess.run(
+            [str(PROVISION_SH), "--dry-run"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        assert proc.returncode == 0
+        assert "Administrator 'parallaxadmin': PRESERVED" in proc.stdout
+
+        # All accounts must be detected as existing
+        assert "Group 'analyst': EXISTS (GID=1001)" in proc.stdout
+        assert "User 'analyst': EXISTS (UID=1001, GID=1001)" in proc.stdout
+        assert "Group 'rhea': EXISTS (GID=1002)" in proc.stdout
+        assert "User 'rhea': EXISTS (UID=1002, GID=1002)" in proc.stdout
+        assert "Group 'svc-pulse': EXISTS (GID=1003)" in proc.stdout
+        assert "User 'svc-pulse': EXISTS (UID=1003, GID=1003)" in proc.stdout
+
+        # Must NOT propose creating any challenge user or group
+        assert "would create UID=" not in proc.stdout
+        assert "would create GID=" not in proc.stdout
+
+        # Check compliance using boundary.check_host_identities
+        audit = check_host_identities(
+            admin_user="parallaxadmin",
+            passwd_path=passwd_file,
+            group_path=group_file,
+        )
+        assert audit["compliant"] is True
+        assert audit["admin_preserved"] is True
+        assert len(audit["errors"]) == 0
+        assert audit["challenge_accounts"]["analyst"]["uid"] == 1001
+        assert audit["challenge_accounts"]["rhea"]["uid"] == 1002
+        assert audit["challenge_accounts"]["svc-pulse"]["uid"] == 1003
+
+
+def test_provisioning_clean_system_default_ids():
+    """Verify clean system with no existing accounts provisions ground-truth default IDs."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        passwd_file = tmp_path / "passwd"
+        group_file = tmp_path / "group"
+
+        passwd_file.write_text("root:x:0:0:root:/root:/bin/bash\n", encoding="utf-8")
+        group_file.write_text("root:x:0:\n", encoding="utf-8")
+
+        env = os.environ.copy()
+        env["PARALLAX_MOCK_PASSWD"] = str(passwd_file)
+        env["PARALLAX_MOCK_GROUP"] = str(group_file)
+
+        proc = subprocess.run(
+            [str(PROVISION_SH), "--dry-run"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        assert proc.returncode == 0
+        assert "User 'analyst': MISSING (would create UID=1000, GID=1000)" in proc.stdout
+        assert "User 'rhea': MISSING (would create UID=1001, GID=1001)" in proc.stdout
+        assert "User 'svc-pulse': MISSING (would create UID=1002, GID=1002)" in proc.stdout
+
+
+def test_provisioning_partial_existing_accounts():
+    """Verify provisioning handles partially existing accounts without collisions."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        passwd_file = tmp_path / "passwd"
+        group_file = tmp_path / "group"
+
+        passwd_file.write_text(
+            "root:x:0:0:root:/root:/bin/bash\n"
+            "parallaxadmin:x:1000:1000:Admin:/home/parallaxadmin:/bin/bash\n"
+            "analyst:x:1005:1005:Analyst:/home/analyst:/bin/bash\n",
+            encoding="utf-8",
+        )
+        group_file.write_text(
+            "root:x:0:\n"
+            "parallaxadmin:x:1000:\n"
+            "analyst:x:1005:\n",
+            encoding="utf-8",
+        )
+
+        env = os.environ.copy()
+        env["PARALLAX_MOCK_PASSWD"] = str(passwd_file)
+        env["PARALLAX_MOCK_GROUP"] = str(group_file)
+
+        proc = subprocess.run(
+            [str(PROVISION_SH), "--dry-run"],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+
+        assert proc.returncode == 0
+        assert "User 'analyst': EXISTS (UID=1005, GID=1005)" in proc.stdout
+        assert "User 'rhea': MISSING (would create UID=1001, GID=1001)" in proc.stdout
+        assert "User 'svc-pulse': MISSING (would create UID=1002, GID=1002)" in proc.stdout
+
+
+def test_check_host_identities_detects_collision():
+    """Verify check_host_identities detects collision between challenge account and administrator."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        passwd_file = tmp_path / "passwd"
+        group_file = tmp_path / "group"
+
+        # Flawed setup: analyst shares UID 1000 with parallaxadmin
+        passwd_file.write_text(
+            "root:x:0:0:root:/root:/bin/bash\n"
+            "parallaxadmin:x:1000:1000:Admin:/home/parallaxadmin:/bin/bash\n"
+            "analyst:x:1000:1000:Analyst:/home/analyst:/bin/bash\n",
+            encoding="utf-8",
+        )
+        group_file.write_text(
+            "root:x:0:\n"
+            "parallaxadmin:x:1000:\n"
+            "analyst:x:1000:\n",
+            encoding="utf-8",
+        )
+
+        audit = check_host_identities(
+            admin_user="parallaxadmin",
+            passwd_path=passwd_file,
+            group_path=group_file,
+        )
+
+        assert audit["compliant"] is False
+        assert audit["admin_preserved"] is False
+        assert any("Collision" in err for err in audit["errors"])
+

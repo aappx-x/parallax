@@ -216,69 +216,322 @@ install_packages() {
     fi
 }
 
-# Idempotent user and group configuration
+# ==============================================================================
+# Identity & Account Management Helpers (Safe Conflict Resolution)
+# ==============================================================================
+
+# Check if a UID exists on system or mock database
+uid_in_use() {
+    local check_uid="$1"
+    if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
+        grep -q -E "^[^:]*:[^:]*:${check_uid}:" "${PARALLAX_MOCK_PASSWD}"
+        return $?
+    fi
+    if which getent >/dev/null 2>&1; then
+        getent passwd "${check_uid}" >/dev/null 2>&1
+    elif id "${check_uid}" >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Check if a GID exists on system or mock database
+gid_in_use() {
+    local check_gid="$1"
+    if [[ -n "${PARALLAX_MOCK_GROUP:-}" && -f "${PARALLAX_MOCK_GROUP}" ]]; then
+        grep -q -E "^[^:]*:[^:]*:${check_gid}:" "${PARALLAX_MOCK_GROUP}"
+        return $?
+    fi
+    if which getent >/dev/null 2>&1; then
+        getent group "${check_gid}" >/dev/null 2>&1
+    else
+        grep -q -E "^[^:]*:[^:]*:${check_gid}:" /etc/group 2>/dev/null
+    fi
+}
+
+# Retrieve username owning UID
+get_user_for_uid() {
+    local check_uid="$1"
+    if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
+        grep -E "^[^:]*:[^:]*:${check_uid}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 | cut -d: -f1
+        return 0
+    fi
+    if which getent >/dev/null 2>&1; then
+        getent passwd "${check_uid}" 2>/dev/null | cut -d: -f1
+    elif id -nu "${check_uid}" >/dev/null 2>&1; then
+        id -nu "${check_uid}" 2>/dev/null
+    fi
+}
+
+# Retrieve group name owning GID
+get_group_for_gid() {
+    local check_gid="$1"
+    if [[ -n "${PARALLAX_MOCK_GROUP:-}" && -f "${PARALLAX_MOCK_GROUP}" ]]; then
+        grep -E "^[^:]*:[^:]*:${check_gid}:" "${PARALLAX_MOCK_GROUP}" 2>/dev/null | head -n1 | cut -d: -f1
+        return 0
+    fi
+    if which getent >/dev/null 2>&1; then
+        getent group "${check_gid}" 2>/dev/null | cut -d: -f1
+    else
+        grep -E "^[^:]*:[^:]*:${check_gid}:" /etc/group 2>/dev/null | head -n1 | cut -d: -f1
+    fi
+}
+
+# Check if user exists by username
+user_exists() {
+    local uname="$1"
+    if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
+        grep -q -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}"
+        return $?
+    fi
+    id -u "${uname}" >/dev/null 2>&1
+}
+
+# Check if group exists by groupname
+group_exists() {
+    local gname="$1"
+    if [[ -n "${PARALLAX_MOCK_GROUP:-}" && -f "${PARALLAX_MOCK_GROUP}" ]]; then
+        grep -q -E "^${gname}:" "${PARALLAX_MOCK_GROUP}"
+        return $?
+    fi
+    if which getent >/dev/null 2>&1; then
+        getent group "${gname}" >/dev/null 2>&1
+    else
+        grep -q -E "^${gname}:" /etc/group 2>/dev/null
+    fi
+}
+
+# Retrieve UID for a given user
+get_uid_for_user() {
+    local uname="$1"
+    if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
+        grep -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 | cut -d: -f3
+        return 0
+    fi
+    id -u "${uname}" 2>/dev/null
+}
+
+# Retrieve primary GID for a given user
+get_gid_for_user() {
+    local uname="$1"
+    if [[ -n "${PARALLAX_MOCK_PASSWD:-}" && -f "${PARALLAX_MOCK_PASSWD}" ]]; then
+        grep -E "^${uname}:" "${PARALLAX_MOCK_PASSWD}" 2>/dev/null | head -n1 | cut -d: -f4
+        return 0
+    fi
+    id -g "${uname}" 2>/dev/null
+}
+
+# Retrieve GID for a given group
+get_gid_for_group() {
+    local gname="$1"
+    if [[ -n "${PARALLAX_MOCK_GROUP:-}" && -f "${PARALLAX_MOCK_GROUP}" ]]; then
+        grep -E "^${gname}:" "${PARALLAX_MOCK_GROUP}" 2>/dev/null | head -n1 | cut -d: -f3
+        return 0
+    fi
+    if which getent >/dev/null 2>&1; then
+        getent group "${gname}" 2>/dev/null | cut -d: -f3
+    else
+        grep -E "^${gname}:" /etc/group 2>/dev/null | head -n1 | cut -d: -f3
+    fi
+}
+
+# Helper to check list membership
+is_in_list() {
+    local target="$1"
+    shift
+    local item
+    for item in "$@"; do
+        if [[ "${item}" == "${target}" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Find next available UID not in system passwd and not in allocated list
+find_available_uid() {
+    local candidate="$1"
+    shift || true
+    local allocated=()
+    if [[ $# -gt 0 ]]; then
+        allocated=("$@")
+    fi
+
+    while true; do
+        local in_alloc=1
+        if [[ ${#allocated[@]} -gt 0 ]]; then
+            if is_in_list "${candidate}" "${allocated[@]}"; then
+                in_alloc=0
+            fi
+        fi
+
+        if [[ ${in_alloc} -ne 0 ]] && ! uid_in_use "${candidate}"; then
+            echo "${candidate}"
+            return 0
+        fi
+        candidate=$((candidate + 1))
+    done
+}
+
+# Find next available GID not in system group and not in allocated list
+find_available_gid() {
+    local candidate="$1"
+    shift || true
+    local allocated=()
+    if [[ $# -gt 0 ]]; then
+        allocated=("$@")
+    fi
+
+    while true; do
+        local in_alloc=1
+        if [[ ${#allocated[@]} -gt 0 ]]; then
+            if is_in_list "${candidate}" "${allocated[@]}"; then
+                in_alloc=0
+            fi
+        fi
+
+        if [[ ${in_alloc} -ne 0 ]] && ! gid_in_use "${candidate}"; then
+            echo "${candidate}"
+            return 0
+        fi
+        candidate=$((candidate + 1))
+    done
+}
+
+# Idempotent user and group configuration with collision safety
 configure_accounts() {
     log_info "Configuring lab user accounts and groups idempotently..."
 
+    # Preserve existing administrator account (e.g. parallaxadmin)
+    local admin_user="parallaxadmin"
+    if user_exists "${admin_user}"; then
+        local admin_uid admin_gid
+        admin_uid="$(get_uid_for_user "${admin_user}")"
+        admin_gid="$(get_gid_for_user "${admin_user}")"
+        if [[ "${MODE}" == "dry-run" ]]; then
+            log_dry_run "Administrator '${admin_user}': PRESERVED (UID=${admin_uid}, GID=${admin_gid}, untouched)"
+        else
+            log_info "Administrator account '${admin_user}' detected (UID=${admin_uid}, GID=${admin_gid}); preserving untouched."
+        fi
+    fi
+
+    # Challenge account specifications with preferred ground-truth IDs
+    local pref_analyst_uid="${PARALLAX_ANALYST_UID:-${ANALYST_UID}}"
+    local pref_analyst_gid="${PARALLAX_ANALYST_GID:-${ANALYST_GID}}"
+    local pref_rhea_uid="${PARALLAX_RHEA_UID:-${RHEA_UID}}"
+    local pref_rhea_gid="${PARALLAX_RHEA_GID:-${RHEA_GID}}"
+    local pref_pulse_uid="${PARALLAX_SVC_PULSE_UID:-${SVC_PULSE_UID}}"
+    local pref_pulse_gid="${PARALLAX_SVC_PULSE_GID:-${SVC_PULSE_GID}}"
+
     local users_and_groups=(
-        "${ANALYST_USER}:${ANALYST_UID}:${ANALYST_GID}:PARALLAX Investigator:/home/analyst:/bin/bash"
-        "${RHEA_USER}:${RHEA_UID}:${RHEA_GID}:Rhea Sanders:/home/rhea:/bin/bash"
-        "${SVC_PULSE_USER}:${SVC_PULSE_UID}:${SVC_PULSE_GID}:PULSE Service Account:/var/log/pulse:/usr/sbin/nologin"
+        "${ANALYST_USER}:${pref_analyst_uid}:${pref_analyst_gid}:PARALLAX Investigator:/home/analyst:/bin/bash"
+        "${RHEA_USER}:${pref_rhea_uid}:${pref_rhea_gid}:Rhea Sanders:/home/rhea:/bin/bash"
+        "${SVC_PULSE_USER}:${pref_pulse_uid}:${pref_pulse_gid}:PULSE Service Account:/var/log/pulse:/usr/sbin/nologin"
     )
 
+    local allocated_uids=()
+    local allocated_gids=()
+
+    # Protect existing administrator account IDs from collision
+    if user_exists "${admin_user}"; then
+        allocated_uids+=("$(get_uid_for_user "${admin_user}")")
+        allocated_gids+=("$(get_gid_for_user "${admin_user}")")
+    fi
+
     for entry in "${users_and_groups[@]}"; do
-        IFS=":" read -r uname uid gid gecos home shell <<< "${entry}"
+        IFS=":" read -r uname pref_uid pref_gid gecos home shell <<< "${entry}"
 
-        if [[ "${MODE}" == "dry-run" ]]; then
-            if getent group "${uname}" >/dev/null 2>&1; then
-                local actual_gid
-                actual_gid="$(getent group "${uname}" | cut -d: -f3)"
-                log_dry_run "Group '${uname}': EXISTS (GID=${actual_gid}, expected=${gid})"
-            else
-                log_dry_run "Group '${uname}': MISSING (would create GID=${gid})"
-            fi
+        local target_uid target_gid
 
-            if id -u "${uname}" >/dev/null 2>&1; then
-                local actual_uid actual_user_gid
-                actual_uid="$(id -u "${uname}")"
-                actual_user_gid="$(id -g "${uname}")"
-                log_dry_run "User '${uname}': EXISTS (UID=${actual_uid}, GID=${actual_user_gid})"
+        if user_exists "${uname}"; then
+            # User already exists: preserve existing assigned IDs
+            target_uid="$(get_uid_for_user "${uname}")"
+            target_gid="$(get_gid_for_user "${uname}")"
+            allocated_uids+=("${target_uid}")
+            allocated_gids+=("${target_gid}")
+
+            if [[ "${MODE}" == "dry-run" ]]; then
+                log_dry_run "Group '${uname}': EXISTS (GID=${target_gid})"
+                log_dry_run "User '${uname}': EXISTS (UID=${target_uid}, GID=${target_gid})"
             else
-                log_dry_run "User '${uname}': MISSING (would create UID=${uid}, GID=${gid})"
+                log_info "User '${uname}' already exists (UID=${target_uid}, GID=${target_gid}); preserving existing identity."
             fi
-            continue
+        else
+            # User does not exist: resolve non-conflicting GID and UID
+            # 1. Determine target GID
+            if group_exists "${uname}"; then
+                target_gid="$(get_gid_for_group "${uname}")"
+            else
+                target_gid="$(find_available_gid "${pref_gid}" "${allocated_gids[@]+"${allocated_gids[@]}"}")"
+                if [[ "${target_gid}" -ne "${pref_gid}" ]]; then
+                    local conflict_grp
+                    conflict_grp="$(get_group_for_gid "${pref_gid}")"
+                    if [[ -z "${conflict_grp}" ]] && is_in_list "${pref_gid}" "${allocated_gids[@]+"${allocated_gids[@]}"}"; then
+                        conflict_grp="prior challenge identity"
+                    fi
+                    log_info "Default GID ${pref_gid} for group '${uname}' in use by '${conflict_grp:-unknown}'; resolved to non-conflicting GID ${target_gid}."
+                fi
+            fi
+            allocated_gids+=("${target_gid}")
+
+            # 2. Determine target UID
+            target_uid="$(find_available_uid "${pref_uid}" "${allocated_uids[@]+"${allocated_uids[@]}"}")"
+            if [[ "${target_uid}" -ne "${pref_uid}" ]]; then
+                local conflict_usr
+                conflict_usr="$(get_user_for_uid "${pref_uid}")"
+                if [[ -z "${conflict_usr}" ]] && is_in_list "${pref_uid}" "${allocated_uids[@]+"${allocated_uids[@]}"}"; then
+                    conflict_usr="prior challenge identity"
+                fi
+                log_info "Default UID ${pref_uid} for user '${uname}' in use by '${conflict_usr:-unknown}'; resolved to non-conflicting UID ${target_uid}."
+            fi
+            allocated_uids+=("${target_uid}")
+
+            if [[ "${MODE}" == "dry-run" ]]; then
+                if group_exists "${uname}"; then
+                    log_dry_run "Group '${uname}': EXISTS (GID=${target_gid})"
+                else
+                    log_dry_run "Group '${uname}': MISSING (would create GID=${target_gid})"
+                fi
+                log_dry_run "User '${uname}': MISSING (would create UID=${target_uid}, GID=${target_gid})"
+            else
+                # Mutating actions: create group if needed
+                if ! group_exists "${uname}"; then
+                    if groupadd -g "${target_gid}" "${uname}" 2>/dev/null; then
+                        log_success "Created group '${uname}' (GID ${target_gid})"
+                    else
+                        groupadd "${uname}"
+                        target_gid="$(get_gid_for_group "${uname}")"
+                        log_success "Created group '${uname}' (GID ${target_gid})"
+                    fi
+                fi
+
+                # Mutating actions: create user with primary group matching username
+                if [[ "${shell}" == "/usr/sbin/nologin" ]]; then
+                    useradd -u "${target_uid}" -g "${uname}" -r -s "${shell}" -d "${home}" -c "${gecos}" "${uname}"
+                else
+                    useradd -u "${target_uid}" -g "${uname}" -m -s "${shell}" -d "${home}" -c "${gecos}" "${uname}"
+                    echo "${uname}:${uname}" | chpasswd 2>/dev/null || true
+                fi
+                log_success "Created user '${uname}' (UID ${target_uid}, GID ${target_gid})"
+            fi
         fi
 
-        # Ensure group exists with expected GID
-        if ! getent group "${uname}" >/dev/null 2>&1; then
-            groupadd -g "${gid}" "${uname}" 2>/dev/null || groupadd "${uname}"
-            log_success "Created group '${uname}' (GID ${gid})"
-        fi
-
-        # Ensure user exists with expected UID/GID
-        if ! id -u "${uname}" >/dev/null 2>&1; then
-            if [[ "${shell}" == "/usr/sbin/nologin" ]]; then
-                useradd -u "${uid}" -g "${gid}" -r -s "${shell}" -d "${home}" -c "${gecos}" "${uname}"
-            else
-                useradd -u "${uid}" -g "${gid}" -m -s "${shell}" -d "${home}" -c "${gecos}" "${uname}"
-                # Set default challenge password for player convenience
-                echo "${uname}:${uname}" | chpasswd 2>/dev/null || true
-            fi
-            log_success "Created user '${uname}' (UID ${uid})"
-        fi
-
-        # Ensure analyst login password and shell are configured
-        if [[ "${uname}" == "${ANALYST_USER}" ]]; then
+        # Ensure analyst credentials and configuration when mutating
+        if [[ "${MODE}" != "dry-run" && "${uname}" == "${ANALYST_USER}" ]]; then
             echo "${ANALYST_USER}:${ANALYST_USER}" | chpasswd 2>/dev/null || true
             usermod -U "${ANALYST_USER}" 2>/dev/null || true
             usermod -s /bin/bash "${ANALYST_USER}" 2>/dev/null || true
+            if [[ -d "/home/${ANALYST_USER}" ]]; then
+                chown "${ANALYST_USER}:${ANALYST_USER}" "/home/${ANALYST_USER}" 2>/dev/null || true
+            fi
             log_success "Configured login credentials for '${ANALYST_USER}' (password: ${ANALYST_USER})"
         fi
     done
 
     # Add analyst to systemd-journal group for offline log examination
     if [[ "${MODE}" != "dry-run" ]]; then
-        if getent group "systemd-journal" >/dev/null 2>&1; then
+        if group_exists "systemd-journal"; then
             usermod -a -G systemd-journal "${ANALYST_USER}" 2>/dev/null || true
             log_success "Added '${ANALYST_USER}' to 'systemd-journal' group"
         fi
@@ -414,7 +667,7 @@ stage_evidence() {
     fi
 
     # Set appropriate ownership for analyst workspace
-    if id -u "${ANALYST_USER}" >/dev/null 2>&1; then
+    if user_exists "${ANALYST_USER}"; then
         chown -R "${ANALYST_USER}:${ANALYST_USER}" "${target_evidence}"
     fi
 

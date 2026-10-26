@@ -401,3 +401,117 @@ def audit_host_boundaries(target_root: str | Path = "/") -> dict[str, Any]:
         results["paths"][path_str] = item_result
 
     return results
+
+
+def check_host_identities(
+    admin_user: str = "parallaxadmin",
+    passwd_path: str | Path | None = None,
+    group_path: str | Path | None = None,
+) -> dict[str, Any]:
+    """Inspect user and group definitions to verify safe challenge provisioning.
+
+    Verifies:
+    - Administrator account (e.g. parallaxadmin) is preserved intact if present.
+    - Challenge accounts (analyst, rhea, svc-pulse) have unique, non-conflicting IDs.
+    - No challenge account collides with the administrator account's UID or GID.
+
+    Args:
+        admin_user: Name of administrator account to verify (default: 'parallaxadmin').
+        passwd_path: Optional path to custom/mock passwd file.
+        group_path: Optional path to custom/mock group file.
+
+    Returns:
+        Dictionary detailing identity status, collisions, and compliance.
+    """
+    users: dict[str, dict[str, Any]] = {}
+    groups: dict[str, int] = {}
+
+    if passwd_path:
+        p_path = Path(passwd_path)
+        if p_path.is_file():
+            for line in p_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split(":")
+                    if len(parts) >= 7:
+                        try:
+                            users[parts[0]] = {
+                                "uid": int(parts[2]),
+                                "gid": int(parts[3]),
+                                "gecos": parts[4],
+                                "home": parts[5],
+                                "shell": parts[6],
+                            }
+                        except ValueError:
+                            pass
+    else:
+        try:
+            import pwd
+            for entry in pwd.getpwall():
+                users[entry.pw_name] = {
+                    "uid": entry.pw_uid,
+                    "gid": entry.pw_gid,
+                    "gecos": entry.pw_gecos,
+                    "home": entry.pw_dir,
+                    "shell": entry.pw_shell,
+                }
+        except (ImportError, AttributeError):
+            pass
+
+    if group_path:
+        g_path = Path(group_path)
+        if g_path.is_file():
+            for line in g_path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    parts = line.split(":")
+                    if len(parts) >= 3:
+                        try:
+                            groups[parts[0]] = int(parts[2])
+                        except ValueError:
+                            pass
+    else:
+        try:
+            import grp
+            for entry in grp.getgrall():
+                groups[entry.gr_name] = entry.gr_gid
+        except (ImportError, AttributeError):
+            pass
+
+    errors: list[str] = []
+    admin_info = users.get(admin_user)
+
+    challenge_users = [ANALYST_USER, RHEA_USER, SVC_PULSE_USER]
+    present_challenge_uids: list[int] = []
+    present_challenge_gids: list[int] = []
+
+    for cuser in challenge_users:
+        if cuser in users:
+            cuid = users[cuser]["uid"]
+            cgid = users[cuser]["gid"]
+            if admin_info:
+                if cuid == admin_info["uid"]:
+                    errors.append(f"Collision: challenge user '{cuser}' shares UID {cuid} with '{admin_user}'")
+                if cgid == admin_info["gid"]:
+                    errors.append(f"Collision: challenge user '{cuser}' shares GID {cgid} with '{admin_user}'")
+            present_challenge_uids.append(cuid)
+            present_challenge_gids.append(cgid)
+
+    if len(set(present_challenge_uids)) != len(present_challenge_uids):
+        errors.append("Duplicate UID detected among active challenge accounts")
+    if len(set(present_challenge_gids)) != len(present_challenge_gids):
+        errors.append("Duplicate GID detected among active challenge accounts")
+
+    return {
+        "admin_present": admin_info is not None,
+        "admin_user": admin_user,
+        "admin_uid": admin_info["uid"] if admin_info else None,
+        "admin_gid": admin_info["gid"] if admin_info else None,
+        "admin_preserved": admin_info is not None and len(errors) == 0,
+        "challenge_accounts": {
+            u: users[u] for u in challenge_users if u in users
+        },
+        "compliant": len(errors) == 0,
+        "errors": errors,
+    }
+

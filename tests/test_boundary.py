@@ -25,6 +25,7 @@ from parallax.system.boundary import (
     SVC_PULSE_UID,
     SVC_PULSE_USER,
     audit_host_boundaries,
+    check_host_identities,
     compile_helper,
     find_c_compiler,
     parse_audit_rules,
@@ -361,4 +362,57 @@ def test_unprivileged_vs_privileged_boundary_clarification():
             audit_path = Path("/var/log/audit/audit.log")
             if audit_path.exists():
                 assert not os.access(audit_path, os.W_OK), "Unprivileged caller must not have write access to audit log"
+
+
+def test_check_host_identities_unit():
+    """Verify check_host_identities correctly evaluates administrative preservation and collision states."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        passwd_file = tmp_path / "passwd"
+        group_file = tmp_path / "group"
+
+        # Case 1: Valid collision-free provisioning with parallaxadmin intact
+        passwd_file.write_text(
+            "root:x:0:0:root:/root:/bin/bash\n"
+            "parallaxadmin:x:1000:1000:Administrator:/home/parallaxadmin:/bin/bash\n"
+            "analyst:x:1001:1001:Investigator:/home/analyst:/bin/bash\n"
+            "rhea:x:1002:1002:Rhea Sanders:/home/rhea:/bin/bash\n"
+            "svc-pulse:x:1003:1003:Service Account:/var/log/pulse:/usr/sbin/nologin\n",
+            encoding="utf-8",
+        )
+        group_file.write_text(
+            "root:x:0:\n"
+            "parallaxadmin:x:1000:\n"
+            "analyst:x:1001:\n"
+            "rhea:x:1002:\n"
+            "svc-pulse:x:1003:\n",
+            encoding="utf-8",
+        )
+
+        res = check_host_identities("parallaxadmin", passwd_file, group_file)
+        assert res["compliant"] is True
+        assert res["admin_present"] is True
+        assert res["admin_preserved"] is True
+        assert len(res["errors"]) == 0
+        assert res["challenge_accounts"]["analyst"]["uid"] == 1001
+
+        # Case 2: Flawed collision: analyst assigned UID 1000
+        passwd_file.write_text(
+            "root:x:0:0:root:/root:/bin/bash\n"
+            "parallaxadmin:x:1000:1000:Administrator:/home/parallaxadmin:/bin/bash\n"
+            "analyst:x:1000:1000:Investigator:/home/analyst:/bin/bash\n",
+            encoding="utf-8",
+        )
+        group_file.write_text(
+            "root:x:0:\n"
+            "parallaxadmin:x:1000:\n"
+            "analyst:x:1000:\n",
+            encoding="utf-8",
+        )
+
+        res_coll = check_host_identities("parallaxadmin", passwd_file, group_file)
+        assert res_coll["compliant"] is False
+        assert res_coll["admin_preserved"] is False
+        assert any("Collision" in e for e in res_coll["errors"])
+
 
