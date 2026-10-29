@@ -6,7 +6,8 @@
 #   - Oracle VirtualBox on Windows (Ubuntu Server 24.04 x86-64)
 #
 # Sanitizes build directories, packages distribution bundles or configuration
-# templates, and generates SHA-256 release checksums.
+# templates, includes player/maintainer documentation, and generates SHA-256
+# release checksums.
 # ==============================================================================
 
 set -euo pipefail
@@ -29,6 +30,7 @@ VALIDATE_MANIFEST=1
 REQUIRE_DISKS=0
 
 DISK_ARM64=""
+EFI_VARS=""
 DISK_X86_64=""
 
 log_info() {
@@ -62,6 +64,7 @@ Options:
   --target <target>       Packaging target: 'utm', 'virtualbox', or 'both' (default: both).
   --output-dir <path>     Directory to save release artifacts (default: ${OUTPUT_DIR}).
   --disk-arm64 <path>     Path to bootable Ubuntu ARM64 QCOW2 virtual disk.
+  --efi-vars <path>       Path to ARM64 UEFI NVRAM variables (efi_vars.fd).
   --disk-x86_64 <path>    Path to bootable Ubuntu x86-64 VMDK virtual disk.
   --require-disks         Fail if virtual disks are not provided (do not produce templates).
   --no-clean              Skip cleaning Python bytecode and test caches before packaging.
@@ -89,6 +92,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --disk-arm64)
             DISK_ARM64="$2"
+            shift 2
+            ;;
+        --efi-vars)
+            EFI_VARS="$2"
             shift 2
             ;;
         --disk-x86_64)
@@ -122,6 +129,69 @@ if [[ "${TARGET}" != "utm" && "${TARGET}" != "virtualbox" && "${TARGET}" != "bot
     exit 1
 fi
 
+# Portable SHA-256 calculation
+compute_sha256() {
+    local target="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "${target}" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "${target}" | awk '{print $1}'
+    else
+        python3 -c "import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], 'rb').read()).hexdigest())" "${target}"
+    fi
+}
+
+# Verify required tools and files before starting
+check_prerequisites() {
+    log_info "Verifying packaging prerequisites..."
+    local missing_tools=()
+    local missing_files=()
+
+    for tool in bash tar python3; do
+        if ! command -v "${tool}" >/dev/null 2>&1; then
+            missing_tools+=("${tool}")
+        fi
+    done
+
+    if ! command -v shasum >/dev/null 2>&1 && ! command -v sha256sum >/dev/null 2>&1; then
+        if ! command -v python3 >/dev/null 2>&1; then
+            missing_tools+=("shasum/sha256sum/python3")
+        fi
+    fi
+
+    if [[ ${#missing_tools[@]} -gt 0 ]]; then
+        log_error "Missing required packaging tool(s): ${missing_tools[*]}"
+        exit 1
+    fi
+
+    # Check required template and documentation files
+    local req_files=(
+        "${REPO_ROOT}/infra/vm/utm/config.plist"
+        "${REPO_ROOT}/infra/vm/virtualbox/parallax-investigation.ovf"
+        "${REPO_ROOT}/docs/PLAYER_GUIDE.md"
+        "${REPO_ROOT}/docs/MAINTAINER_GUIDE.md"
+    )
+    if [[ "${VALIDATE_MANIFEST}" -eq 1 ]]; then
+        req_files+=("${REPO_ROOT}/evidence/manifests/manifest.json")
+    fi
+
+    for file in "${req_files[@]}"; do
+        if [[ ! -f "${file}" ]]; then
+            missing_files+=("${file}")
+        fi
+    done
+
+    if [[ ${#missing_files[@]} -gt 0 ]]; then
+        log_error "Missing required repository file(s):"
+        for mf in "${missing_files[@]}"; do
+            log_error "  - ${mf}"
+        done
+        exit 1
+    fi
+
+    log_success "Prerequisites verified."
+}
+
 # Clean ephemeral caches and temporary files
 clean_caches() {
     log_info "Sanitizing repository workspace..."
@@ -152,6 +222,10 @@ package_utm() {
             log_error "Specified ARM64 disk image does not exist: ${DISK_ARM64}"
             exit 1
         fi
+        if [[ ! -s "${DISK_ARM64}" ]]; then
+            log_error "Specified ARM64 disk image is empty (0 bytes): ${DISK_ARM64}"
+            exit 1
+        fi
         has_disk=1
     elif [[ "${REQUIRE_DISKS}" -eq 1 ]]; then
         log_error "Missing required ARM64 disk image (--disk-arm64) under --require-disks"
@@ -177,9 +251,29 @@ package_utm() {
     # Copy UTM hardware configuration
     cp "${REPO_ROOT}/infra/vm/utm/config.plist" "${utm_staging}/config.plist"
 
+    # Include comprehensive player documentation
+    cp "${REPO_ROOT}/docs/PLAYER_GUIDE.md" "${utm_staging}/PLAYER_GUIDE.md"
+    cp "${REPO_ROOT}/docs/PLAYER_GUIDE.md" "${OUTPUT_DIR}/PLAYER_GUIDE.md"
+
     if [[ "${has_disk}" -eq 1 ]]; then
         log_info "Embedding bootable disk image into UTM bundle: ${DISK_ARM64}"
         cp "${DISK_ARM64}" "${utm_staging}/Data/disk-arm64.qcow2"
+
+        # Auto-detect or include EFI vars if available
+        local resolved_efi_vars="${EFI_VARS}"
+        if [[ -z "${resolved_efi_vars}" ]]; then
+            local disk_dir
+            disk_dir="$(dirname "${DISK_ARM64}")"
+            if [[ -f "${disk_dir}/efi_vars.fd" ]]; then
+                resolved_efi_vars="${disk_dir}/efi_vars.fd"
+                log_info "Auto-detected UEFI NVRAM variables: ${resolved_efi_vars}"
+            fi
+        fi
+
+        if [[ -n "${resolved_efi_vars}" && -f "${resolved_efi_vars}" ]]; then
+            log_info "Embedding UEFI NVRAM variables into UTM bundle: ${resolved_efi_vars}"
+            cp "${resolved_efi_vars}" "${utm_staging}/Data/efi_vars.fd"
+        fi
 
         cat <<'README_UTM' > "${utm_staging}/README.txt"
 PARALLAX — The Evidence Is Lying
@@ -196,6 +290,10 @@ Quick Start:
    cd ~/parallax
    parallax status
    parallax inspect P01
+
+Player Guide:
+See the included PLAYER_GUIDE.md for investigation workflow, evidence structure,
+and scenario objectives.
 README_UTM
     else
         log_notice "No ARM64 disk provided. Packaging VM configuration template only."
@@ -206,19 +304,30 @@ Package: VM Hardware Configuration Template (Disk Not Included)
 
 Notice:
 This package contains the verified UTM hardware profile, UEFI settings, and network topology.
+Because a virtual appliance requires a provisioned guest operating system disk to boot,
+this configuration template is provided for maintainers or users building from source.
+
 To assemble a complete bootable appliance:
 1. Install Ubuntu Server 24.04 LTS ARM64.
 2. Run provision.sh --prepare inside the guest.
-3. Package using:
+3. Cleanly shut down the guest VM.
+4. Export the disk using qemu-img (e.g. qemu-img convert -O qcow2 -c).
+5. Package using:
    ./infra/packaging/package_appliance.sh --disk-arm64 /path/to/disk-arm64.qcow2
 README_UTM_TPL
     fi
 
+    # Copy README to output root for packaging
+    cp "${utm_staging}/README.txt" "${OUTPUT_DIR}/README.txt"
+
+    # Set standard permissions
+    chmod -R u=rwX,go=rX "${utm_staging}" 2>/dev/null || true
+
     if which zip >/dev/null 2>&1; then
-        (cd "${OUTPUT_DIR}" && zip -q -r "$(basename "${utm_zip}")" "${bundle_name}")
+        (cd "${OUTPUT_DIR}" && zip -q -r "$(basename "${utm_zip}")" "${bundle_name}" "README.txt" "PLAYER_GUIDE.md")
     elif which python3 >/dev/null 2>&1; then
         log_info "Tool 'zip' not found; using 'python3 -m zipfile' to package $(basename "${utm_zip}")."
-        (cd "${OUTPUT_DIR}" && python3 -m zipfile -c "$(basename "${utm_zip}")" "${bundle_name}")
+        (cd "${OUTPUT_DIR}" && python3 -m zipfile -c "$(basename "${utm_zip}")" "${bundle_name}" "README.txt" "PLAYER_GUIDE.md")
     else
         log_error "Missing packaging dependency: 'zip' or 'python3' is required to create $(basename "${utm_zip}")."
         exit 1
@@ -234,6 +343,10 @@ package_virtualbox() {
     if [[ -n "${DISK_X86_64}" ]]; then
         if [[ ! -f "${DISK_X86_64}" ]]; then
             log_error "Specified x86-64 disk image does not exist: ${DISK_X86_64}"
+            exit 1
+        fi
+        if [[ ! -s "${DISK_X86_64}" ]]; then
+            log_error "Specified x86-64 disk image is empty (0 bytes): ${DISK_X86_64}"
             exit 1
         fi
         has_disk=1
@@ -256,15 +369,15 @@ package_virtualbox() {
 
         # Generate standard OVF manifest (.mf)
         local ovf_sha vmdk_sha
-        ovf_sha="$(shasum -a 256 "${vbox_staging}/${vbox_name}.ovf" | awk '{print $1}')"
-        vmdk_sha="$(shasum -a 256 "${vbox_staging}/parallax-disk-x86_64.vmdk" | awk '{print $1}')"
+        ovf_sha="$(compute_sha256 "${vbox_staging}/${vbox_name}.ovf")"
+        vmdk_sha="$(compute_sha256 "${vbox_staging}/parallax-disk-x86_64.vmdk")"
 
         cat <<EOF > "${vbox_staging}/${vbox_name}.mf"
 SHA256(${vbox_name}.ovf)= ${ovf_sha}
 SHA256(parallax-disk-x86_64.vmdk)= ${vmdk_sha}
 EOF
 
-        cat <<'README_VBOX' > "${vbox_staging}/README.txt"
+        cat <<'README_VBOX' > "${OUTPUT_DIR}/README.txt"
 PARALLAX — The Evidence Is Lying
 Target: Oracle VirtualBox on Windows PC (Ubuntu Server 24.04 LTS x86-64)
 Package: Complete Bootable OVA Appliance
@@ -272,7 +385,7 @@ Package: Complete Bootable OVA Appliance
 Quick Start:
 1. Open Oracle VirtualBox 7.x on Windows.
 2. Select File -> Import Appliance...
-3. Select this OVA file and click Finish.
+3. Select 'PARALLAX-Ubuntu-24.04-x86_64.ova' and click Finish.
 4. Start the VM.
 5. Log in with:
    Username: analyst
@@ -281,10 +394,19 @@ Quick Start:
    cd ~/parallax
    parallax status
    parallax inspect P01
+
+Player Guide:
+See the included PLAYER_GUIDE.md for investigation workflow, evidence structure,
+and scenario objectives.
 README_VBOX
 
-        # Create standard OVA tar archive in canonical order: .ovf, disk, .mf
-        (cd "${vbox_staging}" && tar -cf "${vbox_ova}" "${vbox_name}.ovf" "parallax-disk-x86_64.vmdk" "${vbox_name}.mf" "README.txt")
+        cp "${REPO_ROOT}/docs/PLAYER_GUIDE.md" "${OUTPUT_DIR}/PLAYER_GUIDE.md"
+
+        # Set standard permissions
+        chmod -R u=rwX,go=rX "${vbox_staging}" 2>/dev/null || true
+
+        # Create standard OVA tar archive in canonical OVF order: .ovf, disk, .mf
+        (cd "${vbox_staging}" && tar -cf "${vbox_ova}" "${vbox_name}.ovf" "parallax-disk-x86_64.vmdk" "${vbox_name}.mf")
         log_success "Created complete VirtualBox OVA appliance: ${vbox_ova}"
     else
         log_notice "No x86-64 VMDK disk provided. Packaging OVF specification template only."
@@ -296,6 +418,7 @@ README_VBOX
         mkdir -p "${tpl_staging}"
 
         cp "${REPO_ROOT}/infra/vm/virtualbox/parallax-investigation.ovf" "${tpl_staging}/${vbox_name}.ovf"
+        cp "${REPO_ROOT}/docs/PLAYER_GUIDE.md" "${tpl_staging}/PLAYER_GUIDE.md"
 
         cat <<'README_VBOX_TPL' > "${tpl_staging}/README.txt"
 PARALLAX — The Evidence Is Lying
@@ -308,14 +431,24 @@ Because an OVA without its referenced disk (parallax-disk-x86_64.vmdk) is invali
 
 To assemble the complete bootable .ova appliance:
 1. Provision Ubuntu Server 24.04 LTS x86-64.
-2. Export the virtual disk to VMDK format.
-3. Package using:
+2. Run provision.sh --prepare inside the guest.
+3. Cleanly shut down the guest VM.
+4. Export the virtual disk to VMDK format (stream-optimized).
+5. Package using:
    ./infra/packaging/package_appliance.sh --disk-x86_64 /path/to/parallax-disk-x86_64.vmdk
 README_VBOX_TPL
 
+        chmod -R u=rwX,go=rX "${tpl_staging}" 2>/dev/null || true
         (cd "${OUTPUT_DIR}" && tar -czf "$(basename "${tpl_archive}")" "$(basename "${tpl_staging}")")
         log_success "Created VirtualBox OVF template: ${tpl_archive}"
     fi
+}
+
+# Package maintainer documentation separately
+package_maintainer_docs() {
+    log_info "Exporting separate maintainer documentation..."
+    cp "${REPO_ROOT}/docs/MAINTAINER_GUIDE.md" "${OUTPUT_DIR}/MAINTAINER_GUIDE.md"
+    log_success "Maintainer documentation staged at ${OUTPUT_DIR}/MAINTAINER_GUIDE.md"
 }
 
 # Generate release SHA-256 checksums
@@ -325,7 +458,10 @@ generate_checksums() {
     rm -f "${checksum_file}"
 
     (cd "${OUTPUT_DIR}" && find . -maxdepth 1 -type f \( -name "*.zip" -o -name "*.ova" -o -name "*.tar.gz" \) -print0 | sort -z | while IFS= read -r -d '' file; do
-        shasum -a 256 "${file}" | sed 's|^\([0-9a-f]*\)  \./|\1  |'
+        local clean_name="${file#./}"
+        local hash
+        hash="$(compute_sha256 "${clean_name}")"
+        echo "${hash}  ${clean_name}"
     done > "${checksum_file}")
 
     log_success "Generated release checksums in ${checksum_file}:"
@@ -340,6 +476,8 @@ main() {
     echo "======================================================================"
 
     mkdir -p "${OUTPUT_DIR}"
+
+    check_prerequisites
 
     if [[ "${DO_CLEAN}" -eq 1 ]]; then
         clean_caches
@@ -357,6 +495,8 @@ main() {
         package_virtualbox
     fi
 
+    package_maintainer_docs
+
     generate_checksums
 
     echo "======================================================================"
@@ -365,3 +505,4 @@ main() {
 }
 
 main "$@"
+

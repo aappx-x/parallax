@@ -6,8 +6,44 @@
 	<string>QEMU</string>
 	<key>ConfigurationVersion</key>
 	<integer>4</integer>
+	<key>Display</key>
+	<array>
+		<dict>
+			<key>DownscalingFilter</key>
+			<string>Linear</string>
+			<key>DynamicResolution</key>
+			<true/>
+			<key>Hardware</key>
+			<string>virtio-gpu-pci</string>
+			<key>NativeResolution</key>
+			<false/>
+			<key>UpscalingFilter</key>
+			<string>Nearest</string>
+		</dict>
+	</array>
+	<key>Drive</key>
+	<array>
+		<dict>
+			<key>DriveInterface</key>
+			<string>virtio</string>
+			<key>Identifier</key>
+			<string>8A013D22-610B-4862-803A-5E6AC0BEC05D</string>
+			<key>ImageName</key>
+			<string>disk-arm64.qcow2</string>
+			<key>ImageType</key>
+			<string>Disk</string>
+			<key>Interface</key>
+			<string>VirtIO</string>
+			<key>InterfaceVersion</key>
+			<integer>1</integer>
+			<key>ReadOnly</key>
+			<false/>
+		</dict>
+	</array>
 	<key>Information</key>
 	<dict>
+		<key>Icon</key>
+		<string>linux</string>
 		<key>IconCustom</key>
 		<false/>
 		<key>Name</key>
@@ -17,20 +53,14 @@
 Fictional forensic investigation challenge appliance.
 Default investigator account: analyst (password: analyst)</string>
 	</dict>
-	<key>System</key>
+	<key>Input</key>
 	<dict>
-		<key>Architecture</key>
-		<string>aarch64</string>
-		<key>CPU</key>
-		<string>default</string>
-		<key>CPUCount</key>
-		<integer>4</integer>
-		<key>Memory</key>
-		<integer>4096</integer>
-		<key>Target</key>
-		<string>virt</string>
-		<key>UefiBoot</key>
-		<true/>
+		<key>MaximumUsbShare</key>
+		<integer>3</integer>
+		<key>UsbBusSupport</key>
+		<string>3.0</string>
+		<key>UsbSharing</key>
+		<false/>
 	</dict>
 	<key>Network</key>
 	<array>
@@ -45,23 +75,63 @@ Default investigator account: analyst (password: analyst)</string>
 			<array/>
 		</dict>
 	</array>
-	<key>Display</key>
+	<key>QEMU</key>
+	<dict>
+		<key>AdditionalArguments</key>
+		<array/>
+		<key>BalloonDevice</key>
+		<false/>
+		<key>DebugLog</key>
+		<false/>
+		<key>Hypervisor</key>
+		<true/>
+		<key>PS2Controller</key>
+		<false/>
+		<key>RNGDevice</key>
+		<true/>
+		<key>RTCLocalTime</key>
+		<false/>
+		<key>TPMDevice</key>
+		<false/>
+		<key>TSO</key>
+		<false/>
+		<key>UEFIBoot</key>
+		<true/>
+	</dict>
+	<key>Serial</key>
+	<array/>
+	<key>Sharing</key>
+	<dict>
+		<key>ClipboardSharing</key>
+		<true/>
+		<key>DirectoryShareMode</key>
+		<string>VirtFS</string>
+		<key>DirectoryShareReadOnly</key>
+		<false/>
+	</dict>
+	<key>Sound</key>
 	<array>
 		<dict>
 			<key>Hardware</key>
-			<string>virtio-gpu-pci</string>
+			<string>intel-hda</string>
 		</dict>
 	</array>
-	<key>Drive</key>
-	<array>
-		<dict>
-			<key>DriveInterface</key>
-			<string>virtio</string>
-			<key>ImageName</key>
-			<string>disk-arm64.qcow2</string>
-			<key>ImageType</key>
-			<string>Disk</string>
-		</dict>
-	</array>
+	<key>System</key>
+	<dict>
+		<key>Architecture</key>
+		<string>aarch64</string>
+		<key>CPU</key>
+		<string>default</string>
+		<key>CPUCount</key>
+		<integer>4</integer>
+		<key>Memory</key>
+		<integer>4096</integer>
+		<key>MemorySize</key>
+		<integer>4096</integer>
+		<key>Target</key>
+		<string>virt</string>
+		<key>UefiBoot</key>
+		<true/>
+	</dict>
 </dict>
 </plist>

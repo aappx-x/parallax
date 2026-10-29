@@ -117,40 +117,96 @@ sudo ./infra/provisioning/provision.sh --deactivate
 
 ---
 
-## 5. Packaging Release Appliances
+## 5. Producing Virtual Disks
+
+A complete, importable virtual appliance requires a real, provisioned operating system disk image. VM disk images must **never** be checked into Git.
+
+### Target A: UTM on Apple Silicon (ARM64)
+To produce the bootable ARM64 QCOW2 disk from a provisioned UTM guest:
+1. **Clean Shutdown**: Gracefully shut down the running guest VM to flush all filesystem buffers:
+   ```bash
+   /Applications/UTM.app/Contents/MacOS/utmctl stop "Linux" --request
+   ```
+   Or run `sudo poweroff` from within the guest console.
+2. **Locate Disk and NVRAM Files**:
+   The disk image and UEFI NVRAM variables are stored inside the UTM bundle:
+   - Disk: `~/Library/Containers/com.utmapp.UTM/Data/Documents/<VM_NAME>.utm/Data/<UUID>.qcow2`
+   - NVRAM: `~/Library/Containers/com.utmapp.UTM/Data/Documents/<VM_NAME>.utm/Data/efi_vars.fd`
+3. **Compress Image**: Compress the image with `qemu-img` to reduce distribution footprint (from ~5.3 GB to ~2.4 GB):
+   ```bash
+   qemu-img convert -O qcow2 -c \
+       "$HOME/Library/Containers/com.utmapp.UTM/Data/Documents/Linux.utm/Data/8A013D22-610B-4862-803A-5E6AC0BEC05D.qcow2" \
+       /tmp/parallax-disk-arm64.qcow2
+   ```
+4. **Package Complete Appliance**:
+   ```bash
+   ./infra/packaging/package_appliance.sh \
+       --target utm \
+       --disk-arm64 /tmp/parallax-disk-arm64.qcow2 \
+       --efi-vars "$HOME/Library/Containers/com.utmapp.UTM/Data/Documents/Linux.utm/Data/efi_vars.fd"
+   ```
+
+### Target B: Oracle VirtualBox on Windows (x86-64)
+To produce the bootable x86-64 VMDK disk from an x86-64 environment:
+1. Install base Ubuntu Server 24.04 LTS x86-64 in VirtualBox or QEMU.
+2. Clone repository and run safe provisioning:
+   ```bash
+   sudo ./infra/provisioning/provision.sh --prepare
+   ```
+3. Gracefully shut down the guest OS (`sudo poweroff`).
+4. Convert the guest disk to stream-optimized VMDK:
+   ```bash
+   qemu-img convert -O vmdk -o subformat=streamOptimized /path/to/raw_disk /tmp/parallax-disk-x86_64.vmdk
+   ```
+5. Package the complete OVA appliance:
+   ```bash
+   ./infra/packaging/package_appliance.sh \
+       --target virtualbox \
+       --disk-x86_64 /tmp/parallax-disk-x86_64.vmdk
+   ```
+
+---
+
+## 6. Packaging Release Appliances
 
 Run the packaging script from the repository root:
 
 ```bash
-# A. Package complete appliances with provisioned virtual disks:
+# A. Package complete UTM ARM64 appliance with real virtual disk:
 ./infra/packaging/package_appliance.sh \
-    --target both \
-    --disk-arm64 /path/to/ubuntu-arm64.qcow2 \
-    --disk-x86_64 /path/to/ubuntu-x86_64.vmdk
+    --target utm \
+    --disk-arm64 /path/to/disk-arm64.qcow2
 
-# B. Package configuration and OVF specification templates (without disks):
+# B. Package complete VirtualBox x86-64 appliance (when x86-64 VMDK is available):
+./infra/packaging/package_appliance.sh \
+    --target virtualbox \
+    --disk-x86_64 /path/to/parallax-disk-x86_64.vmdk
+
+# C. Package specification templates only (no virtual disks):
 ./infra/packaging/package_appliance.sh --target both
 ```
 
 Outputs in `dist/`:
-- **Complete Appliances (when disks are supplied)**:
-  - `PARALLAX-Ubuntu-24.04-ARM64.utm.zip`: UTM appliance bundle with embedded QCOW2 disk.
-  - `PARALLAX-Ubuntu-24.04-x86_64.ova`: VirtualBox appliance with embedded VMDK disk and `.mf` manifest.
+- **Complete Bootable Appliances (when disks are supplied)**:
+  - `PARALLAX-Ubuntu-24.04-ARM64.utm.zip`: Complete UTM appliance with embedded bootable QCOW2 disk and player guide.
+  - `PARALLAX-Ubuntu-24.04-x86_64.ova`: Standard OVF 1.0 OVA appliance with embedded stream-optimized VMDK and `.mf` manifest.
 - **Specification Templates (when disks are omitted)**:
-  - `PARALLAX-Ubuntu-24.04-ARM64-config.utm.zip`: UTM hardware profile and network topology template.
+  - `PARALLAX-Ubuntu-24.04-ARM64-config.utm.zip`: UTM hardware profile, UEFI settings, and network topology template.
   - `PARALLAX-Ubuntu-24.04-x86_64-ovf-template.tar.gz`: OVF 1.0 XML descriptor and hardware definition template.
-- `RELEASE_SHA256SUMS`: Cryptographic SHA-256 checksums of generated release packages.
+- **Documentation & Integrity**:
+  - `MAINTAINER_GUIDE.md`: Separate maintainer build and provisioning guide.
+  - `RELEASE_SHA256SUMS`: Cryptographic SHA-256 release checksums for all generated release archives.
 
 ---
 
-## 6. Pre-Release Verification Checklist
+## 7. Pre-Release Verification Checklist
 
 Before publishing release packages, verify:
 - [ ] Working tree is clean (`git status`).
-- [ ] All 150 automated unit and integration tests pass (`pytest -v`).
+- [ ] All automated unit and integration tests pass (`pytest -v`).
 - [ ] Verification suite passes (`python3 -m parallax.verify`).
-- [ ] Real virtual disks are verified with `qemu-img info` prior to full appliance packaging.
+- [ ] Real virtual disks are verified with `qemu-img info` and `qemu-img check` prior to full appliance packaging.
+- [ ] No virtual disk images (`*.qcow2`, `*.vmdk`) are staged in Git.
 - [ ] No `__pycache__`, `.pytest_cache`, `.DS_Store`, or `.git` files present in release image.
-- [ ] No private SSH keys or sensitive host history stored in guest.
 - [ ] Evidence manifest checksums match `evidence/manifests/SHA256SUMS`.
 - [ ] Player instructions in `docs/PLAYER_GUIDE.md` match current behavior.

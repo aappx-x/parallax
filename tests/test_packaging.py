@@ -88,6 +88,9 @@ def test_virtualbox_ovf_descriptor_structure():
 
 def test_packaging_template_mode():
     """Verify packaging script produces configuration templates when virtual disks are omitted."""
+    import tarfile
+    import zipfile
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         proc = subprocess.run(
             [str(PACKAGE_SH), "--target", "both", "--output-dir", tmp_dir],
@@ -98,6 +101,7 @@ def test_packaging_template_mode():
 
         utm_archive = Path(tmp_dir) / "PARALLAX-Ubuntu-24.04-ARM64-config.utm.zip"
         vbox_archive = Path(tmp_dir) / "PARALLAX-Ubuntu-24.04-x86_64-ovf-template.tar.gz"
+        maintainer_guide = Path(tmp_dir) / "MAINTAINER_GUIDE.md"
         checksum_file = Path(tmp_dir) / "RELEASE_SHA256SUMS"
 
         assert utm_archive.is_file(), "UTM template archive missing"
@@ -105,6 +109,20 @@ def test_packaging_template_mode():
 
         assert vbox_archive.is_file(), "VirtualBox OVF template archive missing"
         assert vbox_archive.stat().st_size > 0
+
+        # Maintainer documentation must be placed separately
+        assert maintainer_guide.is_file(), "MAINTAINER_GUIDE.md missing from output"
+
+        # Verify player documentation is included inside archives
+        with zipfile.ZipFile(utm_archive) as zf:
+            zip_names = zf.namelist()
+            assert any("PLAYER_GUIDE.md" in n for n in zip_names), "PLAYER_GUIDE.md missing from UTM archive"
+            assert any("README.txt" in n for n in zip_names), "README.txt missing from UTM archive"
+
+        with tarfile.open(vbox_archive, "r:gz") as tf:
+            tar_names = tf.getnames()
+            assert any("PLAYER_GUIDE.md" in n for n in tar_names), "PLAYER_GUIDE.md missing from VBox template"
+            assert any("README.txt" in n for n in tar_names), "README.txt missing from VBox template"
 
         assert checksum_file.is_file(), "RELEASE_SHA256SUMS file missing"
         checksum_text = checksum_file.read_text(encoding="utf-8")
@@ -115,6 +133,8 @@ def test_packaging_template_mode():
 
 def test_packaging_full_appliance_with_disks():
     """Verify packaging script produces complete bootable appliances when virtual disks are provided."""
+    import zipfile
+
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
         fake_arm64_disk = tmp_path / "ubuntu-arm64.qcow2"
@@ -138,16 +158,56 @@ def test_packaging_full_appliance_with_disks():
 
         utm_appliance = out_dir / "PARALLAX-Ubuntu-24.04-ARM64.utm.zip"
         vbox_appliance = out_dir / "PARALLAX-Ubuntu-24.04-x86_64.ova"
+        maintainer_guide = out_dir / "MAINTAINER_GUIDE.md"
         checksum_file = out_dir / "RELEASE_SHA256SUMS"
 
         assert utm_appliance.is_file(), "UTM complete appliance missing"
         assert vbox_appliance.is_file(), "VirtualBox complete appliance missing"
+        assert maintainer_guide.is_file(), "Separate MAINTAINER_GUIDE.md missing from output"
+
+        # Check UTM archive contains disk and documentation
+        with zipfile.ZipFile(utm_appliance) as zf:
+            names = zf.namelist()
+            assert "PARALLAX-Ubuntu-24.04-ARM64.utm/Data/disk-arm64.qcow2" in names
+            assert any("PLAYER_GUIDE.md" in n for n in names)
+            assert any("README.txt" in n for n in names)
 
         # Check OVA archive contains the VMDK and .mf manifest
         proc_tar = subprocess.run(["tar", "-tf", str(vbox_appliance)], capture_output=True, text=True)
         assert proc_tar.returncode == 0
         assert "parallax-disk-x86_64.vmdk" in proc_tar.stdout
         assert "PARALLAX-Ubuntu-24.04-x86_64.mf" in proc_tar.stdout
+
+
+def test_packaging_with_efi_vars():
+    """Verify --efi-vars embeds efi_vars.fd into the UTM bundle Data directory."""
+    import zipfile
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        fake_arm64_disk = tmp_path / "ubuntu-arm64.qcow2"
+        fake_efi_vars = tmp_path / "efi_vars.fd"
+        fake_arm64_disk.write_bytes(b"mock_disk")
+        fake_efi_vars.write_bytes(b"mock_efi_vars")
+
+        out_dir = tmp_path / "out"
+        proc = subprocess.run(
+            [
+                str(PACKAGE_SH),
+                "--target", "utm",
+                "--output-dir", str(out_dir),
+                "--disk-arm64", str(fake_arm64_disk),
+                "--efi-vars", str(fake_efi_vars),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0
+        utm_appliance = out_dir / "PARALLAX-Ubuntu-24.04-ARM64.utm.zip"
+        assert utm_appliance.is_file()
+
+        with zipfile.ZipFile(utm_appliance) as zf:
+            assert "PARALLAX-Ubuntu-24.04-ARM64.utm/Data/efi_vars.fd" in zf.namelist()
 
 
 def test_packaging_require_disks_flag():
@@ -196,4 +256,50 @@ def test_packaging_zip_python_fallback():
         assert utm_archive.is_file(), "UTM archive was not created via python3 zipfile fallback"
         assert utm_archive.stat().st_size > 0
         assert "using 'python3 -m zipfile'" in proc.stdout
+
+
+def test_packaging_checksums_match():
+    """Verify that RELEASE_SHA256SUMS accurately reflects generated archive checksums."""
+    import hashlib
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        proc = subprocess.run(
+            [str(PACKAGE_SH), "--target", "both", "--output-dir", tmp_dir],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode == 0
+
+        checksum_file = Path(tmp_dir) / "RELEASE_SHA256SUMS"
+        assert checksum_file.is_file()
+
+        lines = [line.strip() for line in checksum_file.read_text(encoding="utf-8").splitlines() if line.strip()]
+        assert len(lines) >= 2
+
+        for line in lines:
+            expected_hash, filename = line.split("  ", 1)
+            target_file = Path(tmp_dir) / filename
+            assert target_file.is_file(), f"Checksum referenced missing file: {filename}"
+            actual_hash = hashlib.sha256(target_file.read_bytes()).hexdigest()
+            assert actual_hash == expected_hash, f"Hash mismatch for {filename}: expected {expected_hash}, got {actual_hash}"
+
+
+def test_packaging_missing_prerequisite_tool_or_file():
+    """Verify packaging script detects missing required repository files."""
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # Create a fake repo root without config.plist
+        fake_repo = Path(tmp_dir) / "parallax"
+        fake_repo.mkdir()
+        fake_infra = fake_repo / "infra" / "packaging"
+        fake_infra.mkdir(parents=True)
+        shutil.copy(PACKAGE_SH, fake_infra / "package_appliance.sh")
+
+        proc = subprocess.run(
+            ["bash", str(fake_infra / "package_appliance.sh"), "--output-dir", str(fake_repo / "dist")],
+            capture_output=True,
+            text=True,
+        )
+        assert proc.returncode != 0
+        assert "Missing required repository file" in proc.stderr
+
 
